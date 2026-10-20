@@ -83,9 +83,10 @@ class H(BaseHTTPRequestHandler):
                 return self._file(os.path.join(os.path.dirname(__file__), "www", "ui.html"))
             if u.path == "/api/state":
                 repo = q.get("repo") or self.server.repo
-                st = {"config": C.masked(C.load()), "repo": repo, "home": C.HOME}
+                st = {"config": C.masked(C.load()), "repo": repo, "home": C.HOME, "products": C.products()}
                 if repo and os.path.isdir(repo):
                     project = _project(repo)
+                    st["project"] = C.project_meta(project)
                     st["features"] = C.read_json(os.path.join(project, "features.json"), {})
                     st["brand"] = C.read_json(os.path.join(project, "brand.json"), {})
                     st["jobs"] = make.list_jobs(project)
@@ -119,12 +120,26 @@ class H(BaseHTTPRequestHandler):
                         continue  # masked values come back unchanged; skip them
                     C.set_value(k, v)
                 return self._json({"ok": True, "config": C.masked(C.load())})
+            if u.path == "/api/products":
+                # register a product: primary repo (cloned if a URL) + extra repos
+                repo = scan.resolve_repo(body["repo"])
+                project = C.project_dir(repo)
+                extra = [x for x in (body.get("extra_repos") or []) if x]
+                name = body.get("name") or os.path.basename(repo)
+                C.save_project_meta(project, {"name": name, "extra_repos": extra})
+                C.remember_product(name, repo, extra)
+                return self._json({"ok": True, "repo": repo, "products": C.products()})
+            if u.path == "/api/project":
+                project = _project(body["repo"])
+                allowed = {k: v for k, v in (body.get("patch") or {}).items() if k in ("default_youtube", "name", "extra_repos")}
+                return self._json({"ok": True, "project": C.save_project_meta(project, allowed)})
             if u.path == "/api/scan":
                 repo = scan.resolve_repo(body["repo"])
                 project = C.project_dir(repo)
+                extra = body.get("extra_repos") or C.project_meta(project).get("extra_repos") or []
 
                 def job(log):
-                    out = scan.scan(repo, project, brief=body.get("brief"), log=log)
+                    out = scan.scan(repo, project, brief=body.get("brief"), log=log, extra_repos=extra)
                     if body.get("url"):
                         routes = [r["route"] for r in out.get("routes", [])][:8] or ["/"]
                         scan.screenshots(project, body["url"], routes, log=log)

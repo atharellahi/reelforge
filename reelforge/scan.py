@@ -25,8 +25,10 @@ def resolve_repo(src):
     """A local path is used in place. A git URL is cloned shallowly under
     ~/.reelforge/repos and pulled on later runs."""
     if re.match(r"^(https?://|git@)", src):
-        name = os.path.basename(urlparse(src.replace("git@", "https://").replace(":", "/")).path)
-        name = re.sub(r"\.git$", "", name) or "repo"
+        path = urlparse(src.replace("git@", "https://").replace(":", "/", 1)).path.strip("/")
+        parts = re.sub(r"\.git$", "", path).split("/")
+        # org-qualified, so acme/api and globex/api do not clone onto each other
+        name = "__".join(p for p in parts[-2:] if p) or "repo"
         dest = os.path.join(C.HOME, "repos", name)
         if os.path.isdir(os.path.join(dest, ".git")):
             subprocess.run(["git", "-C", dest, "pull", "--ff-only", "-q"], check=False)
@@ -82,11 +84,13 @@ def routes(repo):
             seg = re.sub(r"\(.*?\)/?", "", m.group(1))  # drop route groups
             out.append(("/" + seg.strip("/"), r))
             continue
-        if low.endswith(CODE_EXT) and any(k in low for k in ("router", "routes", "urls.py", "app.py", "server")):
+        if low.endswith(CODE_EXT) and any(k in low for k in ("router", "routes", "urls.py", "app.py", "main.py", "server", "views", "api")):
             src = _read(p, 60000)
-            for mm in re.finditer(r"""(?:path|route)\s*[:=(]\s*['"](/[^'"\s]{0,80})['"]""", src):
-                out.append((mm.group(1), r))
-            for mm in re.finditer(r"""\.(?:get|post)\(\s*['"](/[^'"\s]{0,80})['"]""", src):
+            # express/react-router `path: "/x"`, Django `path('x/')`, Flask and
+            # FastAPI `@app.get("/x")` - a back-end's routes are evidence too
+            for mm in re.finditer(r"""(?:path|route)\s*[:=(]\s*['"]([^'"\s]{1,80})['"]""", src):
+                out.append(("/" + mm.group(1).lstrip("/"), r))
+            for mm in re.finditer(r"""\.(?:get|post|put|patch|delete|route)\(\s*['"](/[^'"\s]{0,80})['"]""", src):
                 out.append((mm.group(1), r))
     seen, uniq = set(), []
     for route, file in out:
@@ -258,30 +262,60 @@ Return JSON: {"product": {"name","one_line","audience"}, "features": [
 Return at most 12 features, best first."""
 
 
-def scan(repo, project, brief=None, log=print):
+def _evidence(repo, label, budget):
     rd = readme(repo)
     rt = routes(repo)
     st = ui_strings(repo)
     pm = package_meta(repo)
-    evidence = (
-        f"# package\n{json.dumps(pm)[:1500]}\n\n# README\n{rd}\n\n"
-        f"# routes ({len(rt)})\n" + "\n".join(f"{r['route']}  <- {r['file']}" for r in rt) +
-        f"\n\n# UI strings ({len(st)})\n" + "\n".join(f"{s['text']}  <- {s['file']}" for s in st) +
-        f"\n\n# tree\n{tree(repo)}"
+    text = (
+        f"# repo: {label}\n## package\n{json.dumps(pm)[:1500]}\n\n## README\n{rd}\n\n"
+        f"## routes ({len(rt)})\n" + "\n".join(f"{r['route']}  <- {label}/{r['file']}" for r in rt) +
+        f"\n\n## UI strings ({len(st)})\n" + "\n".join(f"{s['text']}  <- {label}/{s['file']}" for s in st) +
+        f"\n\n## tree\n{tree(repo)}"
     )
+    return text[:budget], rt, st, (len(rd), len(rt), len(st))
+
+
+def scan(repo, project, brief=None, log=print, extra_repos=()):
+    """One product may span several repositories - a front-end and the
+    back-end behind it. The primary repo owns .reelforge/; every repo's
+    README, routes and strings are evidence, cited as repo/path."""
+    extra = [resolve_repo(r) for r in extra_repos if r]
+    repos = [repo] + extra
+    labels = [os.path.basename(r.rstrip("/\\")) for r in repos]
+    budget = max(40000, 150000 // len(repos))
+    parts, all_routes, all_strings = [], [], []
+    for r, label in zip(repos, labels):
+        text, rt, st, (nrd, nrt, nst) = _evidence(r, label, budget)
+        parts.append(text); all_routes += rt; all_strings += [s["text"] for s in st]
+        log(f"  {label}: README {nrd} chars, {nrt} routes, {nst} UI strings")
+    evidence = "\n\n".join(parts)
+    if len(repos) > 1:
+        evidence = ("NOTE: the evidence below comes from SEVERAL repositories of ONE product "
+                    f"({', '.join(labels)}). Treat them as one product. Cite evidence as repo/path.\n\n") + evidence
     if brief:
         evidence += f"\n\n# notes from the team\n{brief}"
-    log(f"  evidence: README {len(rd)} chars, {len(rt)} routes, {len(st)} UI strings")
-    data = gemini.text(evidence[:120000], system=FEATURE_SYSTEM, as_json=True, temperature=0.3)
+    # ids must survive a re-scan: jobs, tuning and teammates refer to them.
+    # Left alone the model renames "product_upload_batch_processing" to
+    # "batch_product_upload_processing" and every reference breaks.
+    prev = C.read_json(os.path.join(project, "features.json"), {}) or {}
+    if prev.get("features"):
+        evidence += ("\n\n# previous feature ids - REUSE the same id for the same feature; "
+                     "only new features get new ids\n" +
+                     "\n".join(f"{f['id']}: {f.get('name','')}" for f in prev["features"]))
+    data = gemini.text(evidence[:160000], system=FEATURE_SYSTEM, as_json=True, temperature=0.3)
     feats = data.get("features", [])
     for f in feats:
         f["id"] = re.sub(r"[^a-z0-9]+", "_", str(f.get("id") or f.get("name", "")).lower()).strip("_")[:40]
     out = {"product": data.get("product", {}), "features": feats,
-           "routes": rt, "scanned_from": repo}
+           "routes": all_routes, "scanned_from": repo, "repos": repos}
     C.write_json(os.path.join(project, "features.json"), out)
     # every label a video puts on screen must exist somewhere in the product;
     # the UI strings are that somewhere, kept beside the features
-    C.write_json(os.path.join(project, "ui_strings.json"), [s["text"] for s in st])
+    C.write_json(os.path.join(project, "ui_strings.json"), sorted(set(all_strings)))
+    C.save_project_meta(project, {"name": (data.get("product") or {}).get("name") or labels[0],
+                                  "extra_repos": list(extra_repos)})
+    C.remember_product((data.get("product") or {}).get("name") or labels[0], repo, list(extra_repos))
     bpath = os.path.join(project, "brand.json")
     if not os.path.exists(bpath):
         b = detect_brand(repo, project)

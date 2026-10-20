@@ -74,7 +74,8 @@ def cmd_scan(a):
     from . import scan
     repo = scan.resolve_repo(a.repo)
     project = C.project_dir(repo)
-    out = scan.scan(repo, project, brief=a.brief, log=_log)
+    extra = a.with_repo or C.project_meta(project).get("extra_repos") or []
+    out = scan.scan(repo, project, brief=a.brief, log=_log, extra_repos=extra)
     if a.url:
         routes = [r["route"] for r in out.get("routes", [])][: a.max_shots]
         routes = routes or ["/"]
@@ -103,6 +104,33 @@ def cmd_make(a):
                      platform=a.platform, seconds=a.seconds, voice=a.voice, veo=a.veo,
                      captions=not a.no_captions, log=_log, base_url=a.url)
     print(f"\njob {meta['id']}  {'all checks passed' if meta['check']['ok'] else 'CHECKS FAILED - review before publishing'}")
+
+
+def cmd_products(a):
+    """A product = a primary repo (owns .reelforge/) + any extra repos whose
+    code is also evidence. The list is per machine; the definition travels
+    with the primary repo."""
+    from . import scan
+    if a.action == "list":
+        ps = C.products()
+        if not ps:
+            print("  none yet: reelforge products add <repo> --name X [--with <repo2>]")
+        for p in ps:
+            extra = f"  (+ {', '.join(os.path.basename(x) for x in p.get('extra_repos', []))})" if p.get("extra_repos") else ""
+            print(f"  {p['name']:24s} {p['repo']}{extra}")
+    elif a.action == "add":
+        if not a.repo:
+            sys.exit("usage: reelforge products add <repo> [--name NAME] [--with REPO ...]")
+        repo = scan.resolve_repo(a.repo)
+        project = C.project_dir(repo)
+        C.save_project_meta(project, {"name": a.name or os.path.basename(repo), "extra_repos": a.with_repo or []})
+        C.remember_product(a.name or os.path.basename(repo), repo, a.with_repo or [])
+        print(f"  added {a.name or os.path.basename(repo)} -> {repo}")
+        print("  next: reelforge scan", repo)
+    elif a.action == "default-channel":
+        repo = scan.resolve_repo(a.repo)
+        C.save_project_meta(C.project_dir(repo), {"default_youtube": a.name})
+        print(f"  default YouTube channel for this product: {a.name}")
 
 
 def cmd_check(a):
@@ -147,6 +175,9 @@ def cmd_publish(a):
     if not m.get("check", {}).get("ok") and not a.force:
         sys.exit("this render failed its checks. Review it, then pass --force to publish anyway.")
     results = []
+    if a.youtube == "default":
+        a.youtube = C.project_meta(project).get("default_youtube") or sys.exit(
+            "this product has no default channel: reelforge products default-channel <repo> --name <label>")
     if a.youtube:
         from .publish import youtube
         label = youtube.resolve(a.youtube)
@@ -226,7 +257,13 @@ def main(argv=None):
 
     s = sub.add_parser("scan"); s.add_argument("repo"); s.add_argument("--url", help="running app, for real screenshots")
     s.add_argument("--brief", help="anything the team wants the scanner to know"); s.add_argument("--max-shots", type=int, default=8)
+    s.add_argument("--with", dest="with_repo", action="append", metavar="REPO",
+                   help="another repo of the same product (its back-end, its mobile app); repeatable")
     s.set_defaults(fn=cmd_scan)
+
+    pr = sub.add_parser("products"); pr.add_argument("action", choices=["list", "add", "default-channel"])
+    pr.add_argument("repo", nargs="?"); pr.add_argument("--name"); pr.add_argument("--with", dest="with_repo", action="append", metavar="REPO")
+    pr.set_defaults(fn=cmd_products)
 
     f = sub.add_parser("features"); f.add_argument("repo"); f.set_defaults(fn=cmd_features)
 
@@ -245,7 +282,8 @@ def main(argv=None):
     k = sub.add_parser("check"); k.add_argument("repo"); k.add_argument("job"); k.set_defaults(fn=cmd_check)
 
     u = sub.add_parser("publish"); u.add_argument("repo"); u.add_argument("job")
-    u.add_argument("--youtube", metavar="LABEL_OR_CHANNEL"); u.add_argument("--instagram", action="store_true")
+    u.add_argument("--youtube", metavar="LABEL_OR_CHANNEL", help="an account label, a channel id, or 'default' for the product's default channel")
+    u.add_argument("--instagram", action="store_true")
     u.add_argument("--privacy", choices=["private", "unlisted", "public"]); u.add_argument("--title")
     u.add_argument("--url", help="already-hosted URL of the video (Instagram)"); u.add_argument("--force", action="store_true")
     u.set_defaults(fn=cmd_publish)

@@ -119,6 +119,32 @@ Or the local web app, which does the same with buttons:
 
     reelforge ui --repo ./my-app
 
+### Products with more than one repo
+
+A front-end and its back-end are one product. The first repo is the
+**primary** - its `.reelforge/` holds the shared state - and every other repo
+is read as evidence too (README, routes including Flask/FastAPI/Django,
+strings), cited as `repo/path`.
+
+    reelforge products add ./web --name Pixigen --with ./api --with ../mobile
+    reelforge scan ./web                 # scans web + api + mobile as one product
+
+In the UI: **+ Product**, name, primary repo, extra repos one per line, *Add
+and scan*. The product switcher in the header moves between products.
+
+### Many products on one machine
+
+Each product's state is in its own repo, so facts, brand, tuning notes and
+image caches never mix. What IS shared per machine: your keys and your
+YouTube accounts. To stop a video going to the wrong channel, give each
+product a default:
+
+    reelforge products default-channel ./web --name pixigen
+    reelforge publish ./web <job> --youtube default
+
+Repos cloned from URLs are stored org-qualified (`~/.reelforge/repos/org__name`),
+so two orgs' `api` repos cannot clone onto each other.
+
 ### scan
 
 Reads the README, routes, user-visible UI strings and the folder tree, and asks

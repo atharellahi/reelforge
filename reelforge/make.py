@@ -130,7 +130,10 @@ def make(repo, feature_id=None, prompt="", aspect="9:16", platform="shorts", sec
             "privacy": "private",
         },
         "check": report, "published": [], "seconds_to_make": round(time.time() - t0),
+        "warnings": sb.get("warnings", []),
     }
+    for w in meta["warnings"]:
+        log(f"  warning: {w}")
     C.write_json(os.path.join(job_dir, "meta.json"), meta)
     log(f"done in {meta['seconds_to_make']}s -> {final}")
     return meta

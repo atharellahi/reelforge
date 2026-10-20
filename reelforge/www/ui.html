@@ -48,10 +48,22 @@
 <body>
 <header>
   <h1>reelforge</h1>
-  <input id="repo" placeholder="path to a repo on this machine, or a GitHub URL">
+  <select id="product" onchange="pickProduct()" style="min-width:260px"></select>
+  <input id="repo" placeholder="path to a repo on this machine, or a GitHub URL" style="display:none">
   <button class="sec" onclick="load()">Open</button>
+  <button class="sec" onclick="toggleAdd()">+ Product</button>
   <span class="muted" id="who"></span>
 </header>
+<div id="addp" class="card" style="display:none;margin:14px 22px 0;max-width:1180px">
+  <h2>Add a product</h2>
+  <p class="muted">One product can span several repos - a front-end and the back-end behind it. The first repo is the primary: its <code>.reelforge/</code> folder holds the shared state. Extra repos are read as evidence too.</p>
+  <div class="row">
+    <label>Name <input id="np-name" placeholder="e.g. Pixigen"></label>
+    <label style="flex:2">Primary repo <span class="muted" style="font-weight:500">local path or GitHub URL</span><input id="np-repo" placeholder="C:\work\pixigen-web  or  https://github.com/org/pixigen-web"></label>
+  </div>
+  <label style="margin-top:10px">Extra repos <span class="muted" style="font-weight:500">one per line, optional</span><textarea id="np-extra" rows="2" placeholder="https://github.com/org/pixigen-api"></textarea></label>
+  <div class="row" style="margin-top:10px"><button class="go" onclick="addProduct()">Add and scan</button><button class="sec" onclick="toggleAdd()">Cancel</button></div>
+</div>
 <nav>
   <button data-t="make" class="on">Make</button>
   <button data-t="library">Library</button>
@@ -132,7 +144,7 @@
 <section id="t-setup">
   <div class="card">
     <h2>Keys and tools</h2>
-    <p class="muted">Stored in <span id="cfgpath"></span> on this machine only. Gemini is required; everything else is optional.</p>
+    <p class="muted">Stored in <span id="cfgpath"></span> on this machine only. Gemini is required; everything else is optional. Keys are per machine and shared by every product; a product's own settings (repos, default channel) live in its repo under <code>.reelforge/project.json</code>.</p>
     <div class="kv" id="cfg"></div>
     <div class="row" style="margin-top:12px"><button class="go" onclick="saveCfg()">Save</button><span id="cfg-note" class="note"></span></div>
   </div>
@@ -143,8 +155,32 @@
 const $ = s => document.querySelector(s);
 const api = async (p, body) => { const r = await fetch(p, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)} : {}); return r.json(); };
 let S = {};
-const repo = () => $('#repo').value.trim();
+const repo = () => { const v = $('#product').value; return (v && v !== '__custom') ? v : $('#repo').value.trim(); };
 try { $('#repo').value = localStorage.getItem('rf-repo') || ''; } catch (e) {}
+
+function productOptions(cur) {
+  const ps = S.products || [];
+  const opts = ps.map(p => `<option value="${esc(p.repo)}" ${p.repo === cur ? 'selected' : ''}>${esc(p.name)}${(p.extra_repos||[]).length ? ' (+' + p.extra_repos.length + ' repo' + (p.extra_repos.length > 1 ? 's' : '') + ')' : ''}</option>`);
+  const custom = (!cur || !ps.some(p => p.repo === cur));
+  opts.push(`<option value="__custom" ${custom ? 'selected' : ''}>${ps.length ? 'other path or URL…' : 'enter a repo path or URL…'}</option>`);
+  $('#product').innerHTML = opts.join('');
+  $('#repo').style.display = custom ? '' : 'none';
+}
+function pickProduct() { const v = $('#product').value; $('#repo').style.display = v === '__custom' ? '' : 'none'; if (v !== '__custom') load(); }
+function toggleAdd() { const a = $('#addp'); a.style.display = a.style.display === 'none' ? 'block' : 'none'; }
+async function addProduct() {
+  const body = { name: $('#np-name').value.trim(), repo: $('#np-repo').value.trim(),
+    extra_repos: $('#np-extra').value.split('\n').map(s => s.trim()).filter(Boolean) };
+  if (!body.repo) return alert('A primary repo is needed');
+  const r = await api('/api/products', body);
+  if (r.error) return alert(r.error);
+  toggleAdd();
+  S.products = r.products; productOptions(r.repo); $('#repo').value = r.repo;
+  await load();
+  document.querySelector('nav button[data-t=features]').click();
+  doScan();
+}
+async function setDefaultChannel(label) { await api('/api/project', { repo: repo(), patch: { default_youtube: label } }); load(); }
 
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
@@ -152,9 +188,13 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 });
 
 async function load() {
-  try { localStorage.setItem('rf-repo', repo()); } catch (e) {}
-  S = await api('/api/state?repo=' + encodeURIComponent(repo()));
-  if (!repo() && S.repo) $('#repo').value = S.repo;
+  const cur = repo();
+  try { if (cur) localStorage.setItem('rf-repo', cur); } catch (e) {}
+  S = await api('/api/state?repo=' + encodeURIComponent(cur));
+  const use = cur || S.repo || ((S.products || [])[0] || {}).repo || '';
+  if (!cur && use) { $('#repo').value = use; S = await api('/api/state?repo=' + encodeURIComponent(use)); }
+  productOptions(use);
+  $('#who').textContent = (S.project && S.project.name) ? S.project.name + ((S.project.extra_repos||[]).length ? ' · ' + (1 + S.project.extra_repos.length) + ' repos' : '') : '';
   renderAll();
 }
 
@@ -197,13 +237,15 @@ function jobCard(j) {
         ${ig.length ? '<span class="badge ok">IG</span>' : '<span class="badge">IG</span>'}
         <span class="muted">${esc(j.feature)} · ${esc(j.created)}</span></div>
       ${chk.ok ? '' : `<div class="err">${Object.entries(chk).filter(([k,v]) => v && v.ok === false).map(([k,v]) => k + ': ' + v.why).join(' · ')}</div>`}
+      ${(j.warnings || []).map(w => `<div class="err">⚠ ${esc(w)}</div>`).join('')}
       <label style="margin-top:10px">Title <input data-m="youtube_title" value="${esc(m.youtube_title||'')}" maxlength="100"></label>
       <label style="margin-top:8px">Description <textarea data-m="youtube_description" rows="4">${esc(m.youtube_description||'')}</textarea></label>
       <label style="margin-top:8px">Tags <input data-m="tags" value="${esc((m.tags||[]).join(', '))}"></label>
       <label style="margin-top:8px">Instagram caption <textarea data-m="instagram_caption" rows="3">${esc(m.instagram_caption||'')}</textarea></label>
       <div class="row" style="margin-top:10px">
         <label>Visibility <select data-m="privacy"><option ${m.privacy==='private'?'selected':''}>private</option><option ${m.privacy==='unlisted'?'selected':''}>unlisted</option><option ${m.privacy==='public'?'selected':''}>public</option></select></label>
-        <label>Channel <select data-yt>${accs.map(a => `<option value="${esc(a.label)}">${esc(a.channel_title)} (${esc(a.label)})</option>`).join('') || '<option value="">no channels added</option>'}</select></label>
+        <label>Channel <span class="muted" style="font-weight:500">${(S.project||{}).default_youtube ? 'default: ' + esc(S.project.default_youtube) : '<a href="#" onclick="setDefaultChannel(this.closest(\'.row\').querySelector(\'[data-yt]\').value);return false">set as this product\'s default</a>'}</span>
+          <select data-yt>${accs.map(a => `<option value="${esc(a.label)}" ${a.label === (S.project||{}).default_youtube ? 'selected' : ''}>${esc(a.channel_title)} (${esc(a.label)})</option>`).join('') || '<option value="">no channels added</option>'}</select></label>
         <button class="sec" onclick="saveMeta('${j.id}')">Save copy</button>
         <button class="go" onclick="pub('${j.id}','youtube')" ${accs.length ? '' : 'disabled'}>Publish to YouTube</button>
         <button class="go" onclick="pub('${j.id}','instagram')">Publish to Instagram</button>

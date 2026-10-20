@@ -180,6 +180,41 @@ def project_dir(repo):
     return d
 
 
+# ------------------------------------------------------------- products
+# A product is one PRIMARY repo (where .reelforge/ lives) plus any number of
+# extra repos whose code is also evidence - a back-end beside a front-end.
+# The registry is per machine, so the UI can switch between products; the
+# product's own definition is in its primary repo's .reelforge/project.json,
+# so teammates get it through git.
+
+PRODUCTS = os.path.join(HOME, "products.json")
+
+
+def products():
+    return read_json(PRODUCTS, {"products": []}).get("products", [])
+
+
+def remember_product(name, repo, extra_repos=None):
+    import time
+    repo = os.path.abspath(repo)
+    ps = [p for p in products() if os.path.abspath(p.get("repo", "")) != repo]
+    ps.insert(0, {"name": name or os.path.basename(repo), "repo": repo,
+                  "extra_repos": list(extra_repos or []), "at": time.strftime("%Y-%m-%d")})
+    write_json(PRODUCTS, {"products": ps[:40]})
+    return ps
+
+
+def project_meta(project):
+    return read_json(os.path.join(project, "project.json"), {})
+
+
+def save_project_meta(project, patch):
+    m = project_meta(project)
+    m.update(patch)
+    write_json(os.path.join(project, "project.json"), m)
+    return m
+
+
 def read_json(path, default=None):
     if not os.path.exists(path):
         return default
