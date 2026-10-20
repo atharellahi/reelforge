@@ -20,6 +20,81 @@ Needs Python 3.10+, ffmpeg, and Chrome (or Edge / Chromium).
 Optional, recommended: `pip install "reelforge[check]"` adds faster-whisper for
 exact narration cuts and a spoken-vs-scripted check.
 
+## Fresh machine, step by step
+
+Nothing here depends on any other machine being on.
+
+**1. Prerequisites** (one time per machine)
+
+    # Windows                                 # macOS
+    winget install Python.Python.3.12         brew install python git ffmpeg
+    winget install Git.Git
+    winget install Gyan.FFmpeg
+    # plus Google Chrome from google.com/chrome (Edge or Chromium also work)
+
+**2. Install reelforge** - the repo is private, so you need to be a collaborator
+and signed in to GitHub in git (it will prompt once).
+
+    pip install git+https://github.com/atharellahi/reelforge.git
+    pip install faster-whisper          # optional: exact narration cuts + voice check
+    reelforge doctor                    # if "reelforge" is not found: python -m reelforge.cli doctor
+
+`doctor` lists ffmpeg, Chrome, keys and accounts. Fix anything marked MISSING.
+
+**3. The one required key**
+
+    reelforge config set gemini_api_key <key>      # https://aistudio.google.com/apikey
+
+**4. Point it at the repo** - a local checkout or a git URL.
+
+    reelforge scan ./the-repo --url http://localhost:3000 --brief "the product is X; ignore the admin area"
+    reelforge features ./the-repo
+
+`--url` is optional but worth it: real screenshots beat generated mock
+screens. Then open `the-repo/.reelforge/brand.json` and check **name, url,
+colours, fonts, logo**. The `url` is what the CTA shows - leave it blank and
+the video has no link.
+
+**5. Tell it what you know that the code does not say** (optional, remembered)
+
+    reelforge tune ./the-repo "never mention the beta features"
+    reelforge tune ./the-repo "audience is small business owners, keep it plain"
+
+**6. Make a video**
+
+    reelforge make ./the-repo --feature <id-from-step-4>
+    reelforge make ./the-repo --prompt "lead with how much time it saves"      # free brief
+    reelforge make ./the-repo --feature <id> --aspect 16:9 --seconds 60          # landscape, longer
+
+Takes about three minutes. Ends with `all checks passed` or `CHECKS FAILED`
+with the reason. Output in `the-repo/.reelforge/out/<job>/final.mp4`.
+
+**7. Review, then publish**
+
+    reelforge ui --repo ./the-repo
+
+Library tab: watch it, edit the title / description / tags it drafted, pick a
+channel, publish. Or from the terminal:
+
+    reelforge publish ./the-repo <job> --youtube <label> --privacy unlisted
+
+**8. YouTube, one time per machine** - an OAuth *Desktop app* client from
+Google Cloud Console with the YouTube Data API v3 enabled (any existing one
+works; the json is not tied to a machine). While that OAuth app is in
+"Testing", the Google accounts that will publish must be listed as test users.
+
+    reelforge config set youtube_client_secret ~/Downloads/client_secret.json
+    reelforge accounts add --label work         # browser opens: pick the account AND the channel
+    reelforge accounts add --label personal     # another channel is another label
+    reelforge accounts list
+
+**9. Commit the shared state** so teammates start where you left off:
+
+    git add .reelforge && git commit -m "reelforge project state"
+
+Renders are ignored automatically; features, brand, tuning notes and the
+image cache are what gets shared.
+
 ## Keys
 
 | Key | Needed for | Where |
