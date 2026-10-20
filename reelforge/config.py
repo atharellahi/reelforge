@@ -164,6 +164,19 @@ def project_dir(repo):
         # package's renderer; everything else is worth sharing through git
         with open(gi, "w", encoding="utf-8") as fh:
             fh.write("out/\nshots/\n_engine/\n")
+    # The same rules in the clone's own exclude file, which no branch can
+    # remove. Otherwise a branch that has not merged .reelforge/.gitignore yet
+    # shows every render as an untracked file.
+    exclude = os.path.join(os.path.abspath(repo), ".git", "info", "exclude")
+    if os.path.isdir(os.path.dirname(exclude)):
+        try:
+            have = open(exclude, encoding="utf-8").read() if os.path.exists(exclude) else ""
+            missing = [r for r in (".reelforge/out/", ".reelforge/shots/", ".reelforge/_engine/") if r not in have]
+            if missing:
+                with open(exclude, "a", encoding="utf-8") as fh:
+                    fh.write(("\n" if have and not have.endswith("\n") else "") + "# reelforge\n" + "\n".join(missing) + "\n")
+        except OSError:
+            pass
     return d
 
 
