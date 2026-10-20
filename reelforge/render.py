@@ -30,7 +30,11 @@ class Chrome:
         self.port = _free_port()
         self.width, self.height = width, height
         exe = chrome or C.find_chrome()
-        self.profile = os.path.join(C.HOME, "chrome-profile")
+        # one profile per instance: Chrome refuses a second process on the
+        # same profile, which would make two renders at once (or a UI taking
+        # screenshots during a make) fail in a confusing way
+        import tempfile
+        self.profile = tempfile.mkdtemp(prefix="rf-chrome-", dir=C.HOME)
         self.proc = subprocess.Popen([
             exe, f"--remote-debugging-port={self.port}", "--headless=new", "--hide-scrollbars",
             "--force-device-scale-factor=1", f"--window-size={width},{height}",
@@ -106,6 +110,7 @@ class Chrome:
             self.proc.terminate(); self.proc.wait(timeout=5)
         except Exception:
             pass
+        shutil.rmtree(self.profile, ignore_errors=True)
 
 
 # ----------------------------------------------------------- static server

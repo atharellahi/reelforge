@@ -37,12 +37,14 @@
   .lockS{font-weight:700;color:var(--a2);letter-spacing:.22em;text-transform:uppercase;line-height:1}
   .dev{position:absolute;background:#111;border-radius:48px;box-shadow:0 40px 90px rgba(0,0,0,.28);overflow:hidden}
   .dev .scr{position:absolute;overflow:hidden;background:#fff}
-  .dev .scr img{position:absolute;left:0;top:0;width:100%;display:block;transform-origin:50% 0}
+  /* .shot = a real screenshot; scoped so the HTML mock's own images (photo,
+     logo) are not yanked to the top-left corner by this rule */
+  .dev .scr img.shot{position:absolute;left:0;top:0;width:100%;display:block;transform-origin:50% 0}
   .brw{position:absolute;background:#fff;border-radius:18px;box-shadow:0 40px 90px rgba(0,0,0,.22);overflow:hidden;border:1px solid var(--line)}
   .brw .bar{height:44px;background:#F3F1EE;display:flex;align-items:center;gap:8px;padding:0 18px}
   .brw .bar i{width:12px;height:12px;border-radius:50%;background:#D9D4CE;display:block}
   .brw .scr{position:absolute;left:0;right:0;top:44px;bottom:0;overflow:hidden}
-  .brw .scr img{position:absolute;left:0;top:0;width:100%;display:block;transform-origin:50% 0}
+  .brw .scr img.shot{position:absolute;left:0;top:0;width:100%;display:block;transform-origin:50% 0}
   .dot{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--a);box-shadow:0 0 0 8px rgba(255,255,255,.75)}
   .num{font-family:var(--fh),sans-serif;font-weight:700;color:var(--p);line-height:.95;letter-spacing:-.04em}
   .caret{display:inline-block;width:4px;background:var(--p);margin-left:4px;vertical-align:-6%}
@@ -232,7 +234,7 @@ function beatScreen(g, b, lt, d) {
   const focusY = (b.callouts && b.callouts[0]) ? b.callouts[0].y : .35;
   const ty = -lerp(0, 1, kb) * focusY * 0.22 * 100;
   const enter = easeBack(lt / .7);
-  const inner = b.real ? `<img src="${src(b.image)}" style="transform:scale(${scale}) translateY(${ty}%)" alt="">` : mockUI(b, lt, scale);
+  const inner = b.real ? `<img class="shot" src="${src(b.image)}" style="transform:scale(${scale}) translateY(${ty}%)" alt="">` : mockUI(b, lt, scale);
   // the captions band must stay clear of the device
   const floor = (SB.captions_on !== false) ? LAY.capY - 60 : LAY.bottom - 20;
   if (MODE === 'port' || MODE === 'square') {

@@ -105,6 +105,24 @@ def cmd_make(a):
     print(f"\njob {meta['id']}  {'all checks passed' if meta['check']['ok'] else 'CHECKS FAILED - review before publishing'}")
 
 
+def cmd_check(a):
+    """Re-run the rule checks on an existing render - no re-render, no spend.
+    Useful when the checker improves or a render was reviewed by hand."""
+    from . import check, make, plan, scan
+    repo = scan.resolve_repo(a.repo)
+    project = C.project_dir(repo)
+    job_dir = os.path.join(project, "out", a.job)
+    sb = C.read_json(os.path.join(job_dir, "storyboard.json"))
+    if not sb:
+        sys.exit(f"no job {a.job}")
+    if not os.path.isdir(os.path.join(job_dir, "frames")):
+        sys.exit("frames were cleaned up; re-render to check again")
+    units = [u for _k, u in plan.units(sb)]
+    report = check.run(job_dir, sb, units, log=_log)
+    make.save_meta(project, a.job, {"check": report})
+    print("all checks passed" if report["ok"] else "CHECKS FAILED")
+
+
 def cmd_jobs(a):
     from . import make, scan
     repo = scan.resolve_repo(a.repo)
@@ -223,6 +241,8 @@ def main(argv=None):
     m.set_defaults(fn=cmd_make)
 
     j = sub.add_parser("jobs"); j.add_argument("repo"); j.set_defaults(fn=cmd_jobs)
+
+    k = sub.add_parser("check"); k.add_argument("repo"); k.add_argument("job"); k.set_defaults(fn=cmd_check)
 
     u = sub.add_parser("publish"); u.add_argument("repo"); u.add_argument("job")
     u.add_argument("--youtube", metavar="LABEL_OR_CHANNEL"); u.add_argument("--instagram", action="store_true")

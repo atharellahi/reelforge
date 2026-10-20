@@ -81,6 +81,12 @@ Edit `brand.json` by hand if detection got a colour wrong.
 Output: `.reelforge/out/<job>/final.mp4`, `thumb.jpg`, `meta.json` (title,
 description, tags, caption - drafted, editable).
 
+    reelforge check <repo> <job>     # re-run the checks on an existing render
+
+The on-screen URL comes from `brand.json` and nowhere else. If it is blank the
+CTA shows no link and the job records a warning, rather than letting the
+writer invent one.
+
 ### publish
 
     reelforge accounts add --label work        # browser consent on this machine

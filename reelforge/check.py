@@ -56,7 +56,11 @@ def motion(frames_dir, fps, duration):
             "still_at": stills[:12], "why": "frame never freezes" if not stills else f"{len(stills)} frozen steps"}
 
 
-def voice(vo_wav, units):
+def voice(vo_wav, units, brand=""):
+    """Compare WORDS, with autojunk off. Comparing characters let difflib's
+    autojunk heuristic kick in past 200 chars and score a correct read at 0.65
+    because the transcriber heard the brand as 'Dresley' twice. No transcriber
+    knows a brand name, so heard words close to it are forgiven."""
     try:
         from faster_whisper import WhisperModel
     except Exception:
@@ -64,9 +68,18 @@ def voice(vo_wav, units):
     model = WhisperModel("base.en", device="cpu", compute_type="int8")
     segs, _ = model.transcribe(vo_wav)
     heard = " ".join(s.text for s in segs)
-    norm = lambda s: " ".join(re.findall(r"[a-z0-9']+", s.lower().replace(".com", " dot com").replace("/", " slash ")))
-    sim = difflib.SequenceMatcher(None, norm(" ".join(units)), norm(heard)).ratio()
-    return {"ok": sim >= 0.80, "similarity": round(sim, 2), "why": "narration matches script" if sim >= 0.8 else "narration drifted from script"}
+
+    def words(s):
+        s = s.lower().replace(".com", " dot com").replace("/", " slash ")
+        return re.findall(r"[a-z0-9']+", s)
+    want, got = words(" ".join(units)), words(heard)
+    brand_words = [w for w in words(brand) if len(w) > 3]
+    if brand_words:
+        got = [next((b for b in brand_words if difflib.SequenceMatcher(None, w, b).ratio() >= 0.6), w) for w in got]
+    sim = difflib.SequenceMatcher(None, want, got, autojunk=False).ratio()
+    missing = [w for w in want if w not in got][:8]
+    return {"ok": sim >= 0.80, "similarity": round(sim, 2),
+            "why": "narration matches script" if sim >= 0.8 else f"narration drifted from script (missing: {' '.join(missing)})"}
 
 
 def run(job_dir, sb, units, log=print):
@@ -75,7 +88,7 @@ def run(job_dir, sb, units, log=print):
     report = {"hook": hook(frames, fps), "motion": motion(frames, fps, sb["duration"])}
     vo = os.path.join(job_dir, "vo.wav")
     if os.path.exists(vo):
-        report["voice"] = voice(vo, units)
+        report["voice"] = voice(vo, units, brand=(sb.get("brand") or {}).get("name", ""))
     for k, v in report.items():
         mark = "PASS" if v.get("ok") else ("skip" if v.get("ok") is None else "FAIL")
         extra = {kk: vv for kk, vv in v.items() if kk not in ("ok", "why")}

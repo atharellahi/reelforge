@@ -50,6 +50,8 @@ Non-negotiable:
   The renderer draws the UI itself; the photograph is the human context.
 - `items` (cards/list) must be taken from the cited facts - a real label, a
   real behaviour - never generic slogans like "Always on trend".
+- The CTA `text` is a short imperative line ("Dress with less effort."), not
+  the URL - the URL is shown separately underneath it.
 
 JSON shape:
 {
@@ -186,6 +188,14 @@ def normalize(sb, feature, aspect, platform, seconds, word_budget, project=None)
     if not beats:
         raise RuntimeError("the writer produced no beat that cites a fact; add facts or a brief")
     sb["beats"] = beats[:6]
+    # the URL on screen comes from brand.json or nowhere. Left blank, the
+    # writer invented "pixigenweb.com/upload" - a claim like any other.
+    brand = C.read_json(os.path.join(project, "brand.json"), {}) if project else {}
+    real_url = (brand.get("url") or "").strip()
+    sb["cta"]["url"] = real_url
+    if not real_url:
+        sb["cta"]["line"] = re.sub(r"\s*(?:at|visit)\s+\S+\s*dot\s*com\S*.*$", ".", sb["cta"].get("line", ""), flags=re.I).strip()
+        sb["warnings"] = sb.get("warnings", []) + ["brand.json has no url: CTA shows no link. Set 'url' in .reelforge/brand.json."]
     total = _words(sb["hook"].get("line")) + sum(_words(b.get("line")) for b in sb["beats"]) + _words(sb["cta"].get("line"))
     sb["word_count"] = total
     sb["word_budget"] = word_budget
