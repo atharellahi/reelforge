@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>reelforge</title>
+<style>
+  :root{--p:#1b1016;--a:#C9A961;--bg:#FAF7F2;--line:rgba(0,0,0,.1);--muted:#6b6560;--ok:#0a7a3f;--bad:#b3243c}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--p)}
+  header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line);background:#fff}
+  header h1{font-size:18px;margin:0;letter-spacing:.02em}
+  header input{flex:1;max-width:620px}
+  nav{display:flex;gap:4px;padding:10px 22px 0}
+  nav button{border:0;background:transparent;padding:10px 14px;font:inherit;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
+  nav button.on{color:var(--p);border-color:var(--a)}
+  main{padding:18px 22px 60px;max-width:1180px}
+  section{display:none}section.on{display:block}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  input,select,textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--p);min-width:0}
+  textarea{width:100%;resize:vertical}
+  label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:#3b3530}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .row>label{flex:1;min-width:160px}
+  button.go{background:var(--p);color:#fff;border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}
+  button.sec{background:#fff;color:var(--p);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  pre.log{background:#141214;color:#e8e4df;padding:12px 14px;border-radius:10px;font:12.5px/1.5 ui-monospace,Consolas,monospace;max-height:320px;overflow:auto;white-space:pre-wrap;margin:10px 0 0}
+  .muted{color:var(--muted);font-size:13px}
+  .feat{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .feat .card{margin:0}
+  .feat h3{margin:0 0 4px;font-size:15px}
+  .feat ol{margin:6px 0 0 18px;padding:0;font-size:13px;color:#3b3530}
+  .job{display:grid;grid-template-columns:200px 1fr;gap:18px}
+  .job video{width:100%;border-radius:10px;background:#000}
+  .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;background:#eee8eb;color:#6b6560;margin-right:6px}
+  .badge.ok{background:#e3f2e8;color:var(--ok)}.badge.bad{background:#f8e3e6;color:var(--bad)}
+  .kv{display:grid;grid-template-columns:220px 1fr;gap:8px 14px;align-items:center}
+  .kv input{width:100%}
+  h2{font-size:17px;margin:4px 0 12px}
+  .note{font-size:13px;color:var(--ok);margin:8px 0 0}
+  .err{font-size:13px;color:var(--bad);margin:8px 0 0;white-space:pre-wrap}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px}
+  .chip b{cursor:pointer;margin-left:8px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>reelforge</h1>
+  <input id="repo" placeholder="path to a repo on this machine, or a GitHub URL">
+  <button class="sec" onclick="load()">Open</button>
+  <span class="muted" id="who"></span>
+</header>
+<nav>
+  <button data-t="make" class="on">Make</button>
+  <button data-t="library">Library</button>
+  <button data-t="features">Features</button>
+  <button data-t="accounts">Accounts</button>
+  <button data-t="memory">Memory</button>
+  <button data-t="setup">Setup</button>
+</nav>
+<main>
+
+<section id="t-make" class="on">
+  <div class="card">
+    <h2>Make a video</h2>
+    <div class="row">
+      <label>Feature <select id="mk-feature"><option value="">(pick from scan, or write a brief)</option></select></label>
+      <label>Aspect <select id="mk-aspect"><option>9:16</option><option>16:9</option><option>1:1</option><option>4:5</option></select></label>
+      <label>Platform <select id="mk-platform"><option>shorts</option><option>reels</option><option>tiktok</option><option>youtube</option><option>linkedin</option></select></label>
+      <label>Length <select id="mk-seconds"><option>20</option><option selected>30</option><option>45</option><option>60</option><option>90</option></select></label>
+      <label>Voice <select id="mk-voice"><option value="gemini">Gemini (best)</option><option value="edge">edge-tts (free)</option></select></label>
+    </div>
+    <label style="margin-top:12px">Brief <span class="muted" style="font-weight:500">optional - what to lead with, who it is for, anything the writer should know</span>
+      <textarea id="mk-prompt" rows="3" placeholder="e.g. lead with the time saved every morning; audience is working women 28-45; end on the free trial"></textarea></label>
+    <div class="row" style="margin-top:12px">
+      <label>Running app URL <span class="muted" style="font-weight:500">optional - captures real screens</span><input id="mk-url" placeholder="http://localhost:3000"></label>
+      <label style="flex-direction:row;align-items:center;gap:8px;flex:0"><input type="checkbox" id="mk-veo"> Veo hook plate <span class="muted" style="font-weight:500">(needs key; billed per second)</span></label>
+      <label style="flex-direction:row;align-items:center;gap:8px;flex:0"><input type="checkbox" id="mk-cap" checked> Captions</label>
+      <button class="go" id="mk-go" onclick="doMake()">Make</button>
+    </div>
+    <pre class="log" id="mk-log" style="display:none"></pre>
+  </div>
+</section>
+
+<section id="t-library"><div id="lib"></div></section>
+
+<section id="t-features">
+  <div class="card">
+    <h2>Scan the repo</h2>
+    <div class="row">
+      <label>Running app URL <span class="muted" style="font-weight:500">optional</span><input id="sc-url" placeholder="http://localhost:3000"></label>
+      <label>Notes for the scanner <input id="sc-brief" placeholder="e.g. ignore the admin area; the product is the /stylist flow"></label>
+      <button class="go" onclick="doScan()">Scan</button>
+    </div>
+    <pre class="log" id="sc-log" style="display:none"></pre>
+  </div>
+  <div class="card" id="brand"></div>
+  <div class="feat" id="feats"></div>
+</section>
+
+<section id="t-accounts">
+  <div class="card">
+    <h2>YouTube channels</h2>
+    <p class="muted">Each entry is one consent. Google lets you choose the account and the channel (including Brand Account channels) at the consent screen, so a second channel is just a second label.</p>
+    <div id="accs"></div>
+    <div class="row" style="margin-top:10px">
+      <label>Label <input id="acc-label" placeholder="e.g. drezily, personal, client-x"></label>
+      <button class="sec" onclick="addAcc()">Add channel (opens browser)</button>
+    </div>
+    <pre class="log" id="acc-log" style="display:none"></pre>
+  </div>
+  <div class="card">
+    <h2>Instagram</h2>
+    <p class="muted">Needs a Business/Creator account linked to a Facebook Page, a long-lived token with <code>instagram_content_publish</code>, and the IG user id. Set them in Setup. Meta fetches the video from a URL, so publishing uses S3 if configured, otherwise a temporary Cloudflare tunnel if <code>cloudflared</code> is installed.</p>
+  </div>
+</section>
+
+<section id="t-memory">
+  <div class="card">
+    <h2>What this project has learned</h2>
+    <p class="muted">Corrections stored in <code>.reelforge/memory.json</code> inside the repo, so they travel with it through git. Every later storyboard applies all of them.</p>
+    <div class="chips" id="mem"></div>
+    <div class="row" style="margin-top:12px">
+      <label>Add a correction <input id="mem-note" placeholder="e.g. slower pace; never more than one stat per video; always show the dashboard"></label>
+      <button class="sec" onclick="addMem()">Remember</button>
+    </div>
+  </div>
+</section>
+
+<section id="t-setup">
+  <div class="card">
+    <h2>Keys and tools</h2>
+    <p class="muted">Stored in <span id="cfgpath"></span> on this machine only. Gemini is required; everything else is optional.</p>
+    <div class="kv" id="cfg"></div>
+    <div class="row" style="margin-top:12px"><button class="go" onclick="saveCfg()">Save</button><span id="cfg-note" class="note"></span></div>
+  </div>
+</section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (p, body) => { const r = await fetch(p, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)} : {}); return r.json(); };
+let S = {};
+const repo = () => $('#repo').value.trim();
+try { $('#repo').value = localStorage.getItem('rf-repo') || ''; } catch (e) {}
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 't-' + b.dataset.t));
+});
+
+async function load() {
+  try { localStorage.setItem('rf-repo', repo()); } catch (e) {}
+  S = await api('/api/state?repo=' + encodeURIComponent(repo()));
+  if (!repo() && S.repo) $('#repo').value = S.repo;
+  renderAll();
+}
+
+function renderAll() {
+  // features
+  const feats = (S.features && S.features.features) || [];
+  $('#mk-feature').innerHTML = '<option value="">(pick from scan, or write a brief)</option>' + feats.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
+  $('#feats').innerHTML = feats.map(f => `<div class="card"><h3>${esc(f.name)}</h3><div class="muted">${esc(f.one_line)}</div><ol>${(f.facts||[]).map(x => `<li>${esc(x.text)} <span class="muted">— ${esc(x.evidence)}</span></li>`).join('')}</ol></div>`).join('') || '<div class="muted">Not scanned yet.</div>';
+  const b = S.brand || {};
+  $('#brand').innerHTML = b.name ? `<h2>Brand</h2><div class="row"><span class="chip">${esc(b.name)}</span><span class="chip" style="background:${b.primary};color:#fff">${b.primary}</span><span class="chip" style="background:${b.accent}">${b.accent}</span><span class="chip">${esc(b.font_head)} / ${esc(b.font_body)}</span><span class="chip">${b.logo ? 'logo found' : 'no logo'}</span></div><p class="muted">Edit <code>.reelforge/brand.json</code> in the repo to correct any of these.</p>` : '<span class="muted">Brand appears after the first scan.</span>';
+  // library
+  const jobs = S.jobs || [];
+  $('#lib').innerHTML = jobs.length ? jobs.map(jobCard).join('') : '<div class="card muted">Nothing made yet.</div>';
+  // accounts
+  const accs = S.youtube_accounts || [];
+  $('#accs').innerHTML = accs.length ? accs.map(a => `<div class="row" style="padding:6px 0"><span class="chip"><b style="margin:0 8px 0 0;color:var(--p)">${esc(a.label)}</b>${esc(a.channel_title)} <span class="muted">${a.channel_id}</span></span></div>`).join('') : `<div class="muted">${S.youtube_error ? esc(S.youtube_error) : 'No channels yet.'}</div>`;
+  // memory
+  $('#mem').innerHTML = (S.memory || []).map((n, i) => `<span class="chip">${esc(n.text)}<b onclick="rmMem(${i})">×</b></span>`).join('') || '<span class="muted">Nothing yet.</span>';
+  // config
+  const cfg = S.config || {};
+  $('#cfgpath').textContent = S.home ? S.home + '/config.json' : '';
+  const order = ['gemini_api_key','gemini_tts_voice','edge_voice','youtube_client_secret','instagram_access_token','instagram_user_id','veo_api_key','veo_project','s3_bucket','s3_region','s3_access_key_id','s3_secret_access_key','public_base_url','chrome_path','ffmpeg_path'];
+  $('#cfg').innerHTML = order.map(k => `<div style="font-weight:600;font-size:13px">${k}${k==='gemini_api_key' ? ' <span style="color:var(--bad)">*</span>' : ''}</div><input data-k="${k}" value="${esc(cfg[k] ?? '')}">`).join('');
+}
+
+function jobCard(j) {
+  const r = encodeURIComponent(repo());
+  const pubs = (j.published || []);
+  const yt = pubs.filter(p => p.platform === 'youtube'), ig = pubs.filter(p => p.platform === 'instagram');
+  const accs = S.youtube_accounts || [];
+  const chk = j.check || {};
+  const m = j.meta || {};
+  return `<div class="card job" id="job-${j.id}">
+    <div><video src="/file?repo=${r}&path=out/${j.id}/${j.file}" poster="/file?repo=${r}&path=out/${j.id}/${j.thumb}" controls playsinline preload="metadata"></video>
+      <div class="muted" style="margin-top:6px">${j.aspect} · ${Number(j.duration).toFixed(1)}s · ${esc(j.voice)} voice${j.veo ? ' · veo' : ''}</div>
+      <a class="muted" href="/file?repo=${r}&path=out/${j.id}/${j.file}" download>download</a></div>
+    <div>
+      <div><span class="badge ${chk.ok ? 'ok' : 'bad'}">${chk.ok ? 'checks pass' : 'check failed'}</span>
+        ${yt.length ? `<span class="badge ok">YT · ${yt.map(p=>esc(p.account)).join(', ')}</span>` : '<span class="badge">YT</span>'}
+        ${ig.length ? '<span class="badge ok">IG</span>' : '<span class="badge">IG</span>'}
+        <span class="muted">${esc(j.feature)} · ${esc(j.created)}</span></div>
+      ${chk.ok ? '' : `<div class="err">${Object.entries(chk).filter(([k,v]) => v && v.ok === false).map(([k,v]) => k + ': ' + v.why).join(' · ')}</div>`}
+      <label style="margin-top:10px">Title <input data-m="youtube_title" value="${esc(m.youtube_title||'')}" maxlength="100"></label>
+      <label style="margin-top:8px">Description <textarea data-m="youtube_description" rows="4">${esc(m.youtube_description||'')}</textarea></label>
+      <label style="margin-top:8px">Tags <input data-m="tags" value="${esc((m.tags||[]).join(', '))}"></label>
+      <label style="margin-top:8px">Instagram caption <textarea data-m="instagram_caption" rows="3">${esc(m.instagram_caption||'')}</textarea></label>
+      <div class="row" style="margin-top:10px">
+        <label>Visibility <select data-m="privacy"><option ${m.privacy==='private'?'selected':''}>private</option><option ${m.privacy==='unlisted'?'selected':''}>unlisted</option><option ${m.privacy==='public'?'selected':''}>public</option></select></label>
+        <label>Channel <select data-yt>${accs.map(a => `<option value="${esc(a.label)}">${esc(a.channel_title)} (${esc(a.label)})</option>`).join('') || '<option value="">no channels added</option>'}</select></label>
+        <button class="sec" onclick="saveMeta('${j.id}')">Save copy</button>
+        <button class="go" onclick="pub('${j.id}','youtube')" ${accs.length ? '' : 'disabled'}>Publish to YouTube</button>
+        <button class="go" onclick="pub('${j.id}','instagram')">Publish to Instagram</button>
+      </div>
+      ${pubs.map(p => `<div class="note">${p.platform}: <a href="${p.url}" target="_blank" rel="noreferrer">${p.url}</a>${p.privacy ? ' (' + p.privacy + ')' : ''}</div>`).join('')}
+      <pre class="log" id="pl-${j.id}" style="display:none"></pre>
+    </div></div>`;
+}
+
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+async function follow(runId, logEl, onDone) {
+  logEl.style.display = 'block';
+  const t = setInterval(async () => {
+    const st = await api('/api/run?id=' + runId);
+    logEl.textContent = (st.log || []).join('\n') + (st.error ? '\n\nERROR: ' + st.error : '');
+    logEl.scrollTop = logEl.scrollHeight;
+    if (st.done) { clearInterval(t); onDone && onDone(st); }
+  }, 1200);
+}
+
+async function doScan() {
+  if (!repo()) return alert('Enter a repo path or URL first');
+  const r = await api('/api/scan', { repo: repo(), url: $('#sc-url').value.trim(), brief: $('#sc-brief').value.trim() });
+  if (r.error) return alert(r.error);
+  follow(r.run, $('#sc-log'), load);
+}
+
+async function doMake() {
+  if (!repo()) return alert('Enter a repo path or URL first');
+  const feature = $('#mk-feature').value, prompt = $('#mk-prompt').value.trim();
+  if (!feature && !prompt) return alert('Pick a feature or write a brief');
+  $('#mk-go').disabled = true;
+  const r = await api('/api/make', { repo: repo(), feature, prompt, aspect: $('#mk-aspect').value, platform: $('#mk-platform').value,
+    seconds: $('#mk-seconds').value, voice: $('#mk-voice').value, veo: $('#mk-veo').checked, captions: $('#mk-cap').checked, url: $('#mk-url').value.trim() });
+  if (r.error) { $('#mk-go').disabled = false; return alert(r.error); }
+  follow(r.run, $('#mk-log'), st => { $('#mk-go').disabled = false; load(); if (!st.error) document.querySelector('nav button[data-t=library]').click(); });
+}
+
+function jobMeta(id) {
+  const root = document.getElementById('job-' + id);
+  const m = {};
+  root.querySelectorAll('[data-m]').forEach(el => { m[el.dataset.m] = el.dataset.m === 'tags' ? el.value.split(',').map(s => s.trim()).filter(Boolean) : el.value; });
+  return m;
+}
+async function saveMeta(id) { const r = await api('/api/meta', { repo: repo(), job: id, meta: jobMeta(id) }); if (r.error) alert(r.error); else load(); }
+async function pub(id, platform) {
+  await api('/api/meta', { repo: repo(), job: id, meta: jobMeta(id) });
+  const root = document.getElementById('job-' + id);
+  const body = { repo: repo(), job: id, privacy: root.querySelector('[data-m=privacy]').value };
+  if (platform === 'youtube') body.youtube = root.querySelector('[data-yt]').value; else body.instagram = true;
+  const r = await api('/api/publish', body);
+  if (r.error) return alert(r.error);
+  follow(r.run, document.getElementById('pl-' + id), load);
+}
+async function addAcc() { const label = $('#acc-label').value.trim(); if (!label) return alert('Give it a label'); const r = await api('/api/accounts/add', { label }); if (r.error) return alert(r.error); follow(r.run, $('#acc-log'), load); }
+async function addMem() { const note = $('#mem-note').value.trim(); if (!note) return; await api('/api/tune', { repo: repo(), note }); $('#mem-note').value = ''; load(); }
+async function rmMem(i) { await api('/api/tune', { repo: repo(), remove: i }); load(); }
+async function saveCfg() { const values = {}; document.querySelectorAll('#cfg input').forEach(i => values[i.dataset.k] = i.value); const r = await api('/api/config', { values }); $('#cfg-note').textContent = r.error || 'Saved'; load(); }
+
+load();
+</script>
+</body>
+</html>

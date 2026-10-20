@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>reelforge scene</title>
+<style>
+  /* Everything here is a pure function of T (window.__seek). The storyboard
+     says what; this file says how it moves. Motion rules are baked in:
+       - the frame drifts, so no beat is ever a frozen slide
+       - elements enter with momentum (easeBack), never a plain fade
+       - lists stagger 80ms
+       - the hook has a moving visual from frame zero, text arrives WITH it
+     Safe zones for 9:16: top 220px and bottom 380px belong to platform chrome. */
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{overflow:hidden;background:var(--bg)}
+  body{font-family:var(--fb),system-ui,sans-serif;font-weight:500;color:var(--t2);-webkit-font-smoothing:antialiased}
+  #stage{position:relative;overflow:hidden;background:var(--bg)}
+  #stage::before{content:"";position:absolute;inset:0;z-index:0;
+    background:radial-gradient(70% 55% at 92% 4%,var(--pA),transparent 70%),
+               radial-gradient(75% 65% at 2% 100%,var(--aA),transparent 70%),
+               radial-gradient(60% 60% at 50% 46%,rgba(255,255,255,.55),transparent 70%)}
+  .layer{position:absolute;inset:0;z-index:3}
+  .grp{position:absolute;inset:0;transform-origin:50% 50%}
+  .abs{position:absolute}
+  .hd{font-family:var(--fh),sans-serif;font-weight:700;color:var(--p);line-height:1.08;letter-spacing:-.02em}
+  .eyebrow{font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--a2)}
+  .sub{font-weight:500;color:var(--t2);line-height:1.4}
+  .card{position:absolute;background:#fff;border-radius:22px;overflow:hidden;border:1px solid var(--line);box-shadow:0 26px 64px rgba(0,0,0,.16)}
+  .card img{width:100%;height:100%;object-fit:cover;display:block}
+  .pill{position:absolute;display:inline-flex;align-items:center;gap:12px;border-radius:999px;font-weight:700;white-space:nowrap;background:#fff;color:var(--p);box-shadow:0 12px 30px rgba(0,0,0,.14);border:1px solid var(--line)}
+  .pill.on{background:var(--p);color:#fff}
+  .chip{display:inline-flex;align-items:center;gap:10px;border-radius:10px;padding:12px 20px;font-weight:700;white-space:nowrap;background:var(--pS);color:var(--p)}
+  .cap{position:absolute;left:50%;transform:translateX(-50%);text-align:center;font-weight:600;color:#fff;background:rgba(15,15,15,.82);border-radius:14px;line-height:1.3}
+  .lock{position:absolute;display:flex;align-items:center;gap:14px;z-index:9}
+  .lock img{display:block;border-radius:22%}
+  .lockN{font-family:var(--fh),sans-serif;font-weight:700;color:var(--p);letter-spacing:.02em;line-height:1}
+  .lockS{font-weight:700;color:var(--a2);letter-spacing:.22em;text-transform:uppercase;line-height:1}
+  .dev{position:absolute;background:#111;border-radius:48px;box-shadow:0 40px 90px rgba(0,0,0,.28);overflow:hidden}
+  .dev .scr{position:absolute;overflow:hidden;background:#fff}
+  .dev .scr img{position:absolute;left:0;top:0;width:100%;display:block;transform-origin:50% 0}
+  .brw{position:absolute;background:#fff;border-radius:18px;box-shadow:0 40px 90px rgba(0,0,0,.22);overflow:hidden;border:1px solid var(--line)}
+  .brw .bar{height:44px;background:#F3F1EE;display:flex;align-items:center;gap:8px;padding:0 18px}
+  .brw .bar i{width:12px;height:12px;border-radius:50%;background:#D9D4CE;display:block}
+  .brw .scr{position:absolute;left:0;right:0;top:44px;bottom:0;overflow:hidden}
+  .brw .scr img{position:absolute;left:0;top:0;width:100%;display:block;transform-origin:50% 0}
+  .dot{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--a);box-shadow:0 0 0 8px rgba(255,255,255,.75)}
+  .num{font-family:var(--fh),sans-serif;font-weight:700;color:var(--p);line-height:.95;letter-spacing:-.04em}
+  .caret{display:inline-block;width:4px;background:var(--p);margin-left:4px;vertical-align:-6%}
+  .tag{position:absolute;font-size:18px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--a2);background:rgba(255,255,255,.85);padding:6px 12px;border-radius:8px}
+</style>
+</head>
+<body>
+<div id="stage"><div class="layer" id="layer"></div></div>
+<script>
+// ------------------------------------------------------------- storyboard
+const P = new URLSearchParams(location.search);
+const xhr = new XMLHttpRequest(); xhr.open('GET', P.get('sb'), false); xhr.send(null);
+const SB = JSON.parse(xhr.responseText);
+const B = SB.brand || {};
+const W = SB.width || 1080, H = SB.height || 1920;
+const FPS = SB.fps || 30;
+const MODE = W > H ? 'land' : (W === H ? 'square' : 'port');
+const JOB = P.get('sb').replace(/\/storyboard\.json$/, '');
+
+// brand -> css vars. Alpha variants are derived so the wash matches any palette.
+const hexA = (h, a) => { const n = parseInt((h || '#333').replace('#', ''), 16); const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255; return `rgba(${r},${g},${b},${a})`; };
+const dark = (h, k = 0.72) => { const n = parseInt((h || '#333').replace('#', ''), 16); const f = c => Math.round(c * k); return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`; };
+const R = document.documentElement.style;
+R.setProperty('--p', B.primary || '#1F2937'); R.setProperty('--a', B.accent || '#C9A961');
+R.setProperty('--a2', dark(B.accent || '#C9A961', 0.78)); R.setProperty('--bg', B.bg || '#FAF7F2');
+R.setProperty('--pS', hexA(B.primary, .10)); R.setProperty('--pA', hexA(B.primary, .14)); R.setProperty('--aA', hexA(B.accent, .26));
+R.setProperty('--line', hexA(B.primary, .14)); R.setProperty('--t2', '#1F1A14');
+R.setProperty('--fh', `'${B.font_head || 'Comfortaa'}'`); R.setProperty('--fb', `'${B.font_body || 'Quicksand'}'`);
+const fl = document.createElement('link'); fl.rel = 'stylesheet';
+fl.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(B.font_head || 'Comfortaa')}:wght@500;600;700&family=${encodeURIComponent(B.font_body || 'Quicksand')}:wght@500;600;700&display=block`;
+document.head.appendChild(fl);
+document.documentElement.style.width = W + 'px'; document.documentElement.style.height = H + 'px';
+document.body.style.width = W + 'px'; document.body.style.height = H + 'px';
+const stage = document.getElementById('stage'); stage.style.width = W + 'px'; stage.style.height = H + 'px';
+
+// layout per aspect: where the safe content lives
+const LAY = MODE === 'port'
+  ? { pad: 72, top: 240, bottom: 1540, capY: 1395, h1: 78, h2: 36, cap: 38, capW: 920 }
+  : MODE === 'land'
+  ? { pad: 96, top: 90, bottom: 1000, capY: 950, h1: 72, h2: 32, cap: 34, capW: 1200, col: 760 }
+  : { pad: 64, top: 70, bottom: 1010, capY: 930, h1: 64, h2: 30, cap: 32, capW: 880 };
+
+// ---------------------------------------------------------------- helpers
+let T = parseFloat(P.get('t') || '0');
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const ease = x => 1 - Math.pow(1 - clamp(x), 3);
+const easeIO = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const easeBack = x => { x = clamp(x); const c = 1.70158, c3 = c + 1; return 1 + c3 * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const lerp = (a, b, p) => a + (b - a) * p;
+const L = document.getElementById('layer');
+function el(tag, cls, html, style) { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; if (style) n.setAttribute('style', style); return n; }
+const src = p => p ? (p.startsWith('/') || p.startsWith('http') ? p : '/' + p) : '';
+const img = (p, pos = '50% 30%') => `<img src="${src(p)}" style="width:100%;height:100%;object-fit:cover;object-position:${pos};display:block" alt="">`;
+const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const rise = (p, dist = 28) => `opacity:${ease(p)};transform:translateY(${(1 - ease(p)) * dist}px)`;
+const pop = p => `opacity:${clamp(easeBack(p) * 1.4)};transform:scale(${lerp(.82, 1, easeBack(p))})`;
+function fit(text, base, maxChars) { const n = (text || '').length; return Math.round(base * clamp(maxChars / Math.max(n, 1), .62, 1)); }
+function typed(s, lt, start, per) { const n = clamp(Math.floor((lt - start) / per), 0, s.length); return { text: s.slice(0, n), done: n >= s.length, on: lt >= start }; }
+const caret = h => `<span class="caret" style="height:${h}px"></span>`;
+const fmtNum = v => Math.round(v).toLocaleString('en-US');
+
+// ---------------------------------------------------------------- pieces
+function lockup(g, x, y, size, align = 'left') {
+  const logo = B.logo ? `<img src="${src(B.logo)}" style="width:${size}px;height:${size}px;object-fit:contain" alt="">` : '';
+  const n = el('div', 'lock', `${logo}<div><div class="lockN" style="font-size:${size * .62}px">${esc((B.name || '').toUpperCase())}</div>` +
+    (B.tagline && size > 70 ? `<div class="lockS" style="font-size:${size * .24}px;margin-top:8px">${esc(B.tagline).slice(0, 28)}</div>` : '') + `</div>`,
+    `left:${x}px;top:${y}px;${align === 'right' ? 'transform:translateX(-100%)' : ''}`);
+  g.appendChild(n);
+}
+
+function heading(g, text, sub, lt, y) {
+  const size = fit(text, LAY.h1, 26);
+  const wmax = MODE === 'land' ? LAY.col : W - LAY.pad * 2;
+  g.appendChild(el('div', 'hd', esc(text), `position:absolute;left:${LAY.pad}px;top:${y}px;width:${wmax}px;font-size:${size}px;${rise((lt - .05) / .55, 34)}`));
+  if (sub) g.appendChild(el('div', 'sub', esc(sub), `position:absolute;left:${LAY.pad}px;top:${y + size * 2.25 + 18}px;width:${wmax}px;font-size:${LAY.h2}px;${rise((lt - .22) / .5, 22)}`));
+  return y + size * 2.25 + (sub ? LAY.h2 * 2.9 : 0) + 30;
+}
+
+function caption(text) {
+  if (!text) return;
+  const size = LAY.cap;
+  const n = el('div', 'cap', esc(text), `top:${LAY.capY}px;max-width:${LAY.capW}px;font-size:${size}px;padding:14px 26px`);
+  L.appendChild(n);
+}
+
+function drift(lt, d) { return `transform:scale(${1 + .035 * clamp(lt / Math.max(d, 1))})`; }
+
+// ---------------------------------------------------------------- hooks
+function hookCounter(g, h, lt, d) {
+  const val = h.value || 10, unit = h.unit || '';
+  const p = easeIO(lt / Math.min(1.8, d * .55));
+  const n = fmtNum(val * p);
+  const big = MODE === 'port' ? 300 : 240;
+  const cardW = MODE === 'port' ? 560 : 520, cardH = MODE === 'port' ? 820 : 300;
+  const cp = easeBack(lt / .7);
+  const cx = MODE === 'port' ? W - cardW - LAY.pad + (1 - cp) * 420 : W - cardW - LAY.pad + (1 - cp) * 420;
+  const cy = MODE === 'port' ? LAY.top + 60 : LAY.top + 40;
+  g.appendChild(el('div', 'card', img(h.images[0]), `left:${cx}px;top:${cy}px;width:${cardW}px;height:${cardH}px;transform:rotate(${lerp(-10, -4, cp)}deg);opacity:${clamp(cp * 1.4)}`));
+  const ny = MODE === 'port' ? LAY.top + 700 : LAY.top + 60;
+  g.appendChild(el('div', 'num', `${n}<span style="font-size:${big * .34}px;margin-left:14px;color:var(--a2)">${esc(unit)}</span>`,
+    `position:absolute;left:${LAY.pad}px;top:${ny}px;font-size:${big}px;${rise(lt / .4, 40)}`));
+  const t = typed(h.text || '', lt, .35, .045);
+  if (t.on) g.appendChild(el('div', 'hd', esc(t.text) + (t.done ? '' : caret(LAY.h1 * .9)),
+    `position:absolute;left:${LAY.pad}px;top:${ny + big * 1.05}px;width:${MODE === 'port' ? W - LAY.pad * 2 : LAY.col}px;font-size:${fit(h.text, LAY.h1, 22)}px`));
+}
+
+function hookCards(g, h, lt, d) {
+  const n = Math.min(3, h.images.length);
+  const cw = MODE === 'port' ? 520 : 360, ch = MODE === 'port' ? 760 : 520;
+  const cxs = MODE === 'port' ? [W / 2 - cw / 2 - 150, W / 2 - cw / 2, W / 2 - cw / 2 + 150] : [W - 1180, W - 820, W - 460];
+  const cy = MODE === 'port' ? LAY.top + 40 : LAY.top + 20;
+  // After the whip-in the cards keep breathing, and every 2.2s one of them
+  // lifts - the "punctuate every ~2s" rule. Without this a long hook line left
+  // the picture sitting still for five seconds.
+  const lifted = Math.floor(Math.max(0, lt - .8) / 2.2) % n;
+  const lp = lt > .8 ? Math.sin(Math.PI * clamp(((lt - .8) % 2.2) / .9)) : 0;
+  for (let i = 0; i < n; i++) {
+    const p = easeBack((lt - i * .18) / .6);
+    if (p <= 0) continue;
+    const bob = Math.sin(lt * 1.3 + i * 2.1) * 7;
+    const lift = (i === lifted ? lp : 0);
+    g.appendChild(el('div', 'card', img(h.images[i]),
+      `left:${cxs[i] + (1 - p) * 500}px;top:${cy + i * 26 + bob - lift * 34}px;width:${cw}px;height:${ch}px;` +
+      `transform:rotate(${lerp(14, [-7, 0, 7][i], p) + Math.sin(lt * .9 + i) * 1.4}deg) scale(${1 + lift * .05});opacity:${clamp(p * 1.5)};z-index:${i === lifted ? 5 : i}`));
+  }
+  const ty = MODE === 'port' ? cy + ch + 70 : LAY.top + 40;
+  const tw = MODE === 'port' ? W - LAY.pad * 2 : LAY.col;
+  g.appendChild(el('div', 'hd', esc(h.text), `position:absolute;left:${LAY.pad}px;top:${ty}px;width:${tw}px;font-size:${fit(h.text, LAY.h1 * 1.05, 22)}px;${rise((lt - .5) / .5, 40)}`));
+}
+
+function hookGrid(g, h, lt, d) {
+  const cols = MODE === 'port' ? 2 : 3, rows = MODE === 'port' ? 3 : 2;
+  const gw = W - LAY.pad * 2, gap = 18;
+  const cw = (gw - gap * (cols - 1)) / cols;
+  const areaH = (MODE === 'port' ? 1000 : 640);
+  const ch = (areaH - gap * (rows - 1)) / rows;
+  const y0 = MODE === 'port' ? LAY.top + 20 : LAY.top + 10;
+  for (let i = 0; i < cols * rows; i++) {
+    const p = easeBack((lt - i * .09) / .5);
+    if (p <= 0) continue;
+    const c = i % cols, r = Math.floor(i / cols);
+    g.appendChild(el('div', 'card', img(h.images[i % h.images.length]),
+      `left:${LAY.pad + c * (cw + gap)}px;top:${y0 + r * (ch + gap)}px;width:${cw}px;height:${ch}px;transform:scale(${lerp(.6, 1, p)});opacity:${clamp(p * 1.4)}`));
+  }
+  const tp = easeBack((lt - .75) / .5);
+  if (tp > 0) g.appendChild(el('div', 'pill on', esc(h.text), `left:50%;top:${y0 + areaH / 2}px;transform:translate(-50%,-50%) scale(${lerp(.8, 1, tp)});font-size:${fit(h.text, 54, 26)}px;padding:22px 40px;opacity:${clamp(tp * 1.3)};max-width:${W - 160}px;white-space:normal;text-align:center;border-radius:28px`));
+}
+
+function hookClash(g, h, lt, d) {
+  const cw = MODE === 'port' ? 470 : 420, ch = MODE === 'port' ? 700 : 560;
+  const p = easeBack(lt / .62);
+  const cy = MODE === 'port' ? LAY.top + 60 : LAY.top + 10;
+  const lx = lerp(-cw, W / 2 - cw - 14, p), rx = lerp(W, W / 2 + 14, p);
+  g.appendChild(el('div', 'card', img(h.images[0]), `left:${lx}px;top:${cy}px;width:${cw}px;height:${ch}px;transform:rotate(${lerp(-12, -3, p)}deg)`));
+  g.appendChild(el('div', 'card', img(h.images[1] || h.images[0]), `left:${rx}px;top:${cy + 30}px;width:${cw}px;height:${ch}px;transform:rotate(${lerp(12, 3, p)}deg)`));
+  const vp = easeBack((lt - .5) / .35);
+  if (vp > 0) g.appendChild(el('div', 'pill on', 'vs', `left:50%;top:${cy + ch / 2}px;transform:translate(-50%,-50%) scale(${vp});font-size:44px;padding:16px 30px`));
+  const ty = MODE === 'port' ? cy + ch + 80 : cy + ch + 40;
+  g.appendChild(el('div', 'hd', esc(h.text), `position:absolute;left:${LAY.pad}px;top:${ty}px;width:${W - LAY.pad * 2}px;text-align:center;font-size:${fit(h.text, LAY.h1, 22)}px;${rise((lt - .65) / .5, 40)}`));
+}
+
+function hookTyped(g, h, lt, d) {
+  const z = 1 + .08 * clamp(lt / Math.max(d, 1));
+  g.appendChild(el('div', 'abs', `<img src="${src(h.images[0])}" style="width:100%;height:100%;object-fit:cover;transform:scale(${z});display:block" alt="">`, `inset:0;overflow:hidden`));
+  g.appendChild(el('div', 'abs', '', `inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.62) 70%)`));
+  const t = typed(h.text || '', lt, .2, .05);
+  const y = MODE === 'port' ? H - 760 : H - 420;
+  g.appendChild(el('div', 'hd', esc(t.text) + (t.done ? '' : caret(LAY.h1)), `position:absolute;left:${LAY.pad}px;top:${y}px;width:${W - LAY.pad * 2}px;font-size:${fit(h.text, LAY.h1 * 1.25, 20)}px;color:#fff`));
+}
+
+function hookPlate(g, h, lt, d) {
+  const idx = clamp(Math.floor(lt * FPS) + 1, 1, h.plate_frames || 1);
+  g.appendChild(el('div', 'abs', `<img src="${JOB}/plate/p${String(idx).padStart(5, '0')}.jpg" style="width:100%;height:100%;object-fit:cover;display:block" alt="">`, `inset:0`));
+  g.appendChild(el('div', 'abs', '', `inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.6) 72%)`));
+  const t = typed(h.text || '', lt, .3, .05);
+  const y = MODE === 'port' ? H - 760 : H - 420;
+  g.appendChild(el('div', 'hd', esc(t.text) + (t.done ? '' : caret(LAY.h1)), `position:absolute;left:${LAY.pad}px;top:${y}px;width:${W - LAY.pad * 2}px;font-size:${fit(h.text, LAY.h1 * 1.25, 20)}px;color:#fff`));
+}
+
+// ---------------------------------------------------------------- beats
+function beatScreen(g, b, lt, d) {
+  let y = LAY.top;
+  if (MODE === 'port') y = heading(g, b.heading, b.sub, lt, y);
+  else heading(g, b.heading, b.sub, lt, LAY.top + 120);
+  const kb = clamp(lt / Math.max(d, 1));
+  const scale = lerp(1, 1.12, kb);
+  const focusY = (b.callouts && b.callouts[0]) ? b.callouts[0].y : .35;
+  const ty = -lerp(0, 1, kb) * focusY * 0.22 * 100;
+  const enter = easeBack(lt / .7);
+  const inner = b.real ? `<img src="${src(b.image)}" style="transform:scale(${scale}) translateY(${ty}%)" alt="">` : mockUI(b, lt, scale);
+  // the captions band must stay clear of the device
+  const floor = (SB.captions_on !== false) ? LAY.capY - 60 : LAY.bottom - 20;
+  if (MODE === 'port' || MODE === 'square') {
+    const dw = MODE === 'port' ? 600 : 420, dh = MODE === 'port' ? Math.min(1200, floor - y - 10) : Math.min(820, floor - LAY.top - 180);
+    const dx = W / 2 - dw / 2, dy = MODE === 'port' ? y + 10 : LAY.top + 170;
+    const bez = 16;
+    const dev = el('div', 'dev', `<div class="scr" style="left:${bez}px;top:${bez}px;right:${bez}px;bottom:${bez}px;border-radius:34px">${inner}</div>`,
+      `left:${dx}px;top:${dy + (1 - enter) * 120}px;width:${dw}px;height:${dh}px;opacity:${clamp(enter * 1.3)}`);
+    g.appendChild(dev);
+    if (b.real) callouts(g, b, lt, dx + bez, dy + bez, dw - bez * 2, dh - bez * 2);
+    else g.appendChild(el('div', 'tag', 'illustration', `left:${dx + dw - 180}px;top:${dy - 42}px`));
+  } else {
+    const bw = 1000, bh = 700, bx = W - bw - LAY.pad, by = LAY.top + 100;
+    g.appendChild(el('div', 'brw', `<div class="bar"><i></i><i></i><i></i></div><div class="scr">${inner}</div>`,
+      `left:${bx + (1 - enter) * 160}px;top:${by}px;width:${bw}px;height:${bh}px;opacity:${clamp(enter * 1.3)}`));
+    if (b.real) callouts(g, b, lt, bx, by + 44, bw, bh - 44);
+    else g.appendChild(el('div', 'tag', 'illustration', `left:${bx + bw - 180}px;top:${by - 42}px`));
+  }
+}
+
+// A screen we could not capture is BUILT, not drawn: real HTML in the brand's
+// own colours and fonts, with the callout labels (real UI strings from the
+// facts) as chips. Asking an image model for an app screen produced fake UI
+// with garbled text every time.
+function mockUI(b, lt, scale) {
+  const chips = (b.callouts || []).map((c, i) => {
+    const p = easeBack((lt - .9 - i * .35) / .45);
+    return `<span class="chip" style="font-size:22px;padding:10px 16px;opacity:${clamp(p * 1.4)};transform:translateY(${(1 - clamp(p)) * 16}px) scale(${lerp(.9, 1, clamp(p))})">${esc(c.label)}</span>`;
+  }).join('');
+  const btn = (b.callouts && b.callouts[0]) ? b.callouts[0].label : 'Open';
+  const bp = easeBack((lt - 1.6) / .5);
+  const pulse = 1 + Math.sin(Math.max(0, lt - 2.1) * 3) * .015;
+  const logo = B.logo ? `<img src="${src(B.logo)}" style="width:34px;height:34px;border-radius:9px;object-fit:contain" alt="">` : '';
+  return `<div style="position:absolute;inset:0;background:var(--bg);font-family:var(--fb);display:flex;flex-direction:column">
+    <div style="height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:18px;font-weight:700;color:var(--p)"><span>9:41</span><span style="letter-spacing:2px">●●●</span></div>
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 22px 10px">${logo}<span style="font-family:var(--fh);font-weight:700;font-size:22px;color:var(--p)">${esc(B.name || '')}</span></div>
+    <div style="position:relative;margin:0 18px;height:44%;flex:none;border-radius:22px;overflow:hidden;background:#eee"><img src="${src(b.image)}" style="position:relative;width:100%;height:100%;object-fit:cover;transform:scale(${scale});transform-origin:50% 30%;display:block" alt=""></div>
+    <div style="padding:22px 22px 0;font-family:var(--fh);font-weight:700;font-size:${fit(b.heading, 34, 22)}px;line-height:1.15;color:var(--p)">${esc(b.heading)}</div>
+    <div style="padding:10px 22px 0;font-size:20px;line-height:1.35;color:var(--t2)">${esc(b.sub)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;padding:18px 22px 0">${chips}</div>
+    <div style="margin:auto 22px 26px;height:60px;border-radius:14px;background:var(--p);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;opacity:${clamp(bp * 1.4)};transform:translateY(${(1 - clamp(bp)) * 20}px) scale(${pulse})">${esc(btn)}</div>
+  </div>`;
+}
+
+function callouts(g, b, lt, x0, y0, w, h) {
+  (b.callouts || []).forEach((c, i) => {
+    const p = easeBack((lt - .9 - i * .4) / .45);
+    if (p <= 0) return;
+    const cx = x0 + (c.x || .5) * w, cy = y0 + (c.y || .4) * h;
+    g.appendChild(el('div', 'dot', '', `left:${cx - 11}px;top:${cy - 11}px;transform:scale(${p})`));
+    const right = (c.x || .5) < .55;
+    g.appendChild(el('div', 'pill on', esc(c.label), `left:${right ? cx + 26 : cx - 26}px;top:${cy - 26}px;font-size:26px;padding:12px 20px;transform:${right ? '' : 'translateX(-100%) '}scale(${p});opacity:${clamp(p * 1.4)}`));
+  });
+}
+
+function beatCards(g, b, lt, d) {
+  const items = (b.items && b.items.length) ? b.items : [{ title: b.heading, sub: b.sub, image: b.image }];
+  let y = MODE === 'port' ? heading(g, b.heading, b.sub, lt, LAY.top) : (heading(g, b.heading, b.sub, lt, LAY.top + 60), LAY.top + 60);
+  const n = items.length;
+  if (MODE === 'port') {
+    const cols = n === 1 ? 1 : 2, gap = 26;
+    const cw = n === 1 ? 700 : (W - LAY.pad * 2 - gap) / 2;
+    // rows must end above the caption band; three cards in two columns
+    // used to put the third one under the captions
+    const rows = Math.ceil(n / cols);
+    const avail = (SB.captions_on !== false ? LAY.capY - 50 : LAY.bottom) - y - 10;
+    const chMax = (avail - gap * (rows - 1)) / rows;
+    const ch = Math.min((n === 1 ? 880 : Math.round(cw * 1.2)) + 120, chMax);
+    const ih = ch - 120;
+    items.forEach((it, i) => {
+      const p = easeBack((lt - .25 - i * .09) / .6);
+      if (p <= 0) return;
+      const c = i % cols, r = Math.floor(i / cols);
+      const x = n === 1 ? W / 2 - cw / 2 : LAY.pad + c * (cw + gap);
+      // a gentle bob once settled, so a two-card beat never reads as a slide
+      const yy = y + 10 + r * (ch + gap) + Math.sin(lt * 1.4 + i * 1.7) * 6;
+      g.appendChild(el('div', 'card',
+        `<div style="position:absolute;left:0;top:0;width:100%;height:${ih}px;overflow:hidden">${img(it.image)}</div>` +
+        `<div style="position:absolute;left:20px;right:20px;top:${ih + 16}px"><div style="font-size:28px;font-weight:700;color:var(--p);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.title)}</div>` +
+        `<div style="font-size:22px;font-weight:500;color:var(--t2);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.sub)}</div></div>`,
+        `left:${x}px;top:${yy + (1 - p) * 90}px;width:${cw}px;height:${ch}px;opacity:${clamp(p * 1.4)}`));
+    });
+  } else {
+    const gap = 26, cw = Math.min(380, (W - LAY.col - LAY.pad * 2 - 40 - gap * (n - 1)) / n), ih = Math.round(cw * 1.25), ch = ih + 110;
+    const x0 = W - LAY.pad - (cw * n + gap * (n - 1));
+    items.forEach((it, i) => {
+      const p = easeBack((lt - .25 - i * .09) / .6);
+      if (p <= 0) return;
+      g.appendChild(el('div', 'card',
+        `<div style="position:absolute;left:0;top:0;width:100%;height:${ih}px;overflow:hidden">${img(it.image)}</div>` +
+        `<div style="position:absolute;left:18px;right:18px;top:${ih + 14}px"><div style="font-size:26px;font-weight:700;color:var(--p);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.title)}</div>` +
+        `<div style="font-size:20px;color:var(--t2);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.sub)}</div></div>`,
+        `left:${x0 + i * (cw + gap)}px;top:${LAY.top + 120 + (1 - p) * 90}px;width:${cw}px;height:${ch}px;opacity:${clamp(p * 1.4)}`));
+    });
+  }
+}
+
+function beatStat(g, b, lt, d) {
+  const z = 1 + .06 * clamp(lt / Math.max(d, 1));
+  g.appendChild(el('div', 'abs', `<img src="${src(b.image)}" style="width:100%;height:100%;object-fit:cover;transform:scale(${z});display:block" alt="">`, `inset:0;overflow:hidden`));
+  g.appendChild(el('div', 'abs', '', `inset:0;background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.82) 55%,rgba(255,255,255,.55))`));
+  const p = easeIO((lt - .2) / 1.4);
+  const big = MODE === 'port' ? 330 : 260;
+  const y = MODE === 'port' ? LAY.top + 380 : LAY.top + 180;
+  g.appendChild(el('div', 'eyebrow', esc(b.heading), `position:absolute;left:${LAY.pad}px;top:${y - 70}px;font-size:28px;${rise(lt / .4, 20)}`));
+  g.appendChild(el('div', 'num', `${fmtNum((b.value || 0) * p)}<span style="font-size:${big * .34}px;margin-left:14px;color:var(--a2)">${esc(b.unit || '')}</span>`,
+    `position:absolute;left:${LAY.pad}px;top:${y}px;font-size:${big}px;${rise(lt / .5, 50)}`));
+  g.appendChild(el('div', 'hd', esc(b.label || b.sub), `position:absolute;left:${LAY.pad}px;top:${y + big * 1.1}px;width:${W - LAY.pad * 2}px;font-size:${fit(b.label || b.sub, LAY.h1 * .9, 26)}px;${rise((lt - .5) / .5, 30)}`));
+}
+
+function beatList(g, b, lt, d) {
+  const items = b.items || [];
+  if (MODE === 'port') {
+    // image height gives way to the chips and the caption band below them
+    const room = (SB.captions_on !== false ? LAY.capY - 50 : LAY.bottom) - LAY.top - 40 - LAY.h1 * 2.3 - items.length * 86;
+    const ih = Math.max(380, Math.min(680, room));
+    g.appendChild(el('div', 'card', img(b.image || (items[0] && items[0].image)), `left:${LAY.pad}px;top:${LAY.top}px;width:${W - LAY.pad * 2}px;height:${ih}px;${pop(lt / .6)}`));
+    let y = heading(g, b.heading, '', lt, LAY.top + ih + 40);
+    items.forEach((it, i) => {
+      const p = easeBack((lt - .5 - i * .09) / .5);
+      if (p <= 0) return;
+      g.appendChild(el('div', 'chip', `<b>${esc(it.title)}</b><span style="font-weight:500;color:var(--t2)">${esc(it.sub)}</span>`,
+        `position:absolute;left:${LAY.pad + (1 - p) * 60}px;top:${y + i * 86}px;font-size:28px;opacity:${clamp(p * 1.4)};max-width:${W - LAY.pad * 2}px;overflow:hidden`));
+    });
+  } else {
+    heading(g, b.heading, '', lt, LAY.top + 60);
+    items.forEach((it, i) => {
+      const p = easeBack((lt - .5 - i * .09) / .5);
+      if (p <= 0) return;
+      g.appendChild(el('div', 'chip', `<b>${esc(it.title)}</b><span style="font-weight:500;color:var(--t2)">${esc(it.sub)}</span>`,
+        `position:absolute;left:${LAY.pad + (1 - p) * 60}px;top:${LAY.top + 300 + i * 86}px;font-size:28px;opacity:${clamp(p * 1.4)}`));
+    });
+    const cw = 760, ch = 820;
+    g.appendChild(el('div', 'card', img(b.image || (items[0] && items[0].image)), `left:${W - LAY.pad - cw}px;top:${LAY.top + 40}px;width:${cw}px;height:${ch}px;${pop(lt / .6)}`));
+  }
+}
+
+function beatQuote(g, b, lt, d) {
+  const z = 1 + .06 * clamp(lt / Math.max(d, 1));
+  g.appendChild(el('div', 'abs', `<img src="${src(b.image)}" style="width:100%;height:100%;object-fit:cover;transform:scale(${z});display:block" alt="">`, `inset:0;overflow:hidden`));
+  g.appendChild(el('div', 'abs', '', `inset:0;background:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.66))`));
+  const y = MODE === 'port' ? H - 820 : H - 480;
+  g.appendChild(el('div', 'num', '&ldquo;', `position:absolute;left:${LAY.pad}px;top:${y - 120}px;font-size:200px;color:var(--a);${rise(lt / .4, 20)}`));
+  g.appendChild(el('div', 'hd', esc(b.heading), `position:absolute;left:${LAY.pad}px;top:${y}px;width:${W - LAY.pad * 2}px;font-size:${fit(b.heading, LAY.h1 * 1.1, 24)}px;color:#fff;${rise((lt - .15) / .5, 40)}`));
+  if (b.sub) g.appendChild(el('div', 'sub', esc(b.sub), `position:absolute;left:${LAY.pad}px;top:${y + 260}px;width:${W - LAY.pad * 2}px;font-size:${LAY.h2}px;color:rgba(255,255,255,.85);${rise((lt - .4) / .5, 20)}`));
+}
+
+function beatCta(g, c, lt, d) {
+  const imgs = c.images || [];
+  const n = Math.min(5, imgs.length);
+  const cw = MODE === 'port' ? 300 : 260, ch = MODE === 'port' ? 440 : 380;
+  const cy = MODE === 'port' ? LAY.top + 120 : LAY.top + 20;
+  for (let i = 0; i < n; i++) {
+    const k = i - (n - 1) / 2;
+    const p = easeBack((lt - Math.abs(k) * .12) / .6);
+    if (p <= 0) continue;
+    g.appendChild(el('div', 'card', img(imgs[i]), `left:${W / 2 - cw / 2 + k * (MODE === 'port' ? 150 : 190)}px;top:${cy + Math.abs(k) * 30 + (1 - p) * 200}px;width:${cw}px;height:${ch}px;transform:rotate(${k * 9}deg);opacity:${clamp(p * 1.4)};z-index:${10 - Math.abs(k)}`));
+  }
+  const ty = MODE === 'port' ? cy + ch + 150 : cy + ch + 70;
+  g.appendChild(el('div', 'hd', esc(c.text), `position:absolute;left:${LAY.pad}px;top:${ty}px;width:${W - LAY.pad * 2}px;text-align:center;font-size:${fit(c.text, LAY.h1, 22)}px;${rise((lt - .5) / .5, 40)}`));
+  const lp = ease((lt - .9) / .5);
+  const lw = el('div', 'abs', '', `left:0;right:0;top:${ty + 170}px;display:flex;justify-content:center;opacity:${lp};transform:translateY(${(1 - lp) * 20}px)`);
+  const size = MODE === 'port' ? 96 : 84;
+  const logo = B.logo ? `<img src="${src(B.logo)}" style="width:${size}px;height:${size}px;object-fit:contain;border-radius:22%" alt="">` : '';
+  lw.innerHTML = `<div style="display:flex;align-items:center;gap:18px">${logo}<div><div class="lockN" style="font-size:${size * .58}px">${esc((B.name || '').toUpperCase())}</div><div class="lockS" style="font-size:${size * .22}px;margin-top:8px">${esc((B.tagline || '')).slice(0, 30)}</div></div></div>`;
+  g.appendChild(lw);
+  const up = easeBack((lt - 1.2) / .5);
+  if (up > 0) g.appendChild(el('div', 'pill on', esc(c.url || ''), `left:50%;top:${ty + 170 + size + 60}px;transform:translateX(-50%) scale(${up});font-size:${MODE === 'port' ? 40 : 34}px;padding:18px 40px;opacity:${clamp(up * 1.4)}`));
+}
+
+// ----------------------------------------------------------------- frame
+const HOOKS = { counter: hookCounter, cards: hookCards, grid: hookGrid, clash: hookClash, typed: hookTyped, plate: hookPlate };
+const BEATS = { screen: beatScreen, cards: beatCards, stat: beatStat, list: beatList, quote: beatQuote };
+
+function drawBeat(i, lt) {
+  const tl = SB.timeline[i];
+  const d = tl.end - tl.start;
+  const g = el('div', 'grp', '', drift(lt, d));
+  if (i === 0) {
+    const h = SB.hook;
+    (HOOKS[h.plate_frames ? 'plate' : h.visual] || hookCards)(g, h, lt, d);
+  } else if (i === SB.timeline.length - 1) {
+    beatCta(g, SB.cta, lt, d);
+  } else {
+    const b = SB.beats[i - 1];
+    (BEATS[b.type] || beatCards)(g, b, lt, d);
+    if (MODE === 'port') lockup(g, W - LAY.pad, LAY.top - 10, 44, 'right');
+    else lockup(g, W - LAY.pad, LAY.top - 20, 44, 'right');
+  }
+  return g;
+}
+
+function paint() {
+  L.innerHTML = '';
+  const tl = SB.timeline;
+  let i = tl.findIndex(x => T >= x.start && T < x.end);
+  if (i < 0) i = T >= tl[tl.length - 1].end ? tl.length - 1 : 0;
+  // outgoing beat lingers 0.3s while the next one slides in: a transition,
+  // not a cut
+  const lt = T - tl[i].start;
+  if (i > 0 && lt < .3) {
+    const prev = drawBeat(i - 1, tl[i - 1].end - tl[i - 1].start + lt);
+    prev.style.opacity = String(1 - lt / .3);
+    prev.style.transform += ` translateY(${-30 * lt / .3}px)`;
+    L.appendChild(prev);
+  }
+  const cur = drawBeat(i, lt);
+  if (i > 0) { const p = ease(lt / .45); cur.style.opacity = String(p); cur.style.transform += ` translateY(${(1 - p) * 40}px)`; }
+  L.appendChild(cur);
+  if (SB.captions_on !== false && i > 0 && i < tl.length - 1) {
+    const c = (SB.captions || []).find(x => T >= x.start && T < x.end + .15);
+    if (c) caption(c.text);
+  }
+}
+
+window.__seek = t => { T = t; paint(); };
+window.__imagesReady = () => Promise.all([...document.images].map(im => im.complete ? Promise.resolve() : new Promise(r => { im.onload = im.onerror = r; }))).then(() => true);
+
+// preload every still the storyboard references, then signal ready
+(function () {
+  const list = new Set();
+  (SB.hook.images || []).forEach(p => list.add(p));
+  (SB.cta.images || []).forEach(p => list.add(p));
+  SB.beats.forEach(b => { if (b.image) list.add(b.image); (b.items || []).forEach(it => it.image && list.add(it.image)); });
+  if (B.logo) list.add(B.logo);
+  const imgs = [...list].map(p => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = src(p); }));
+  Promise.all(imgs).then(() => document.fonts.ready).then(() => { paint(); window.__ready = true; });
+})();
+</script>
+</body>
+</html>

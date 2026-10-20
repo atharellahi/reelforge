@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reelforge"
+version = "0.1.0"
+description = "Scan a repo, write and render feature videos with motion graphics and narration, then publish to YouTube and Instagram. Runs entirely on your machine."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "google-genai>=1.30",
+  "websockets>=12",
+  "pillow>=10",
+  "requests>=2.31",
+  "edge-tts>=7",
+  "google-api-python-client>=2.100",
+  "google-auth-oauthlib>=1.2",
+]
+
+[project.optional-dependencies]
+# local transcription for the narration check and for splitting the Gemini
+# take at sentence boundaries. Without it the split falls back to silence
+# detection, which is good but not exact.
+check = ["faster-whisper>=1.0"]
+
+[project.scripts]
+reelforge = "reelforge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["reelforge*"]
+
+[tool.setuptools.package-data]
+reelforge = ["www/*", "rules/*"]
