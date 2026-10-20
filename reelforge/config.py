@@ -160,9 +160,10 @@ def project_dir(repo):
         os.makedirs(os.path.join(d, sub), exist_ok=True)
     gi = os.path.join(d, ".gitignore")
     if not os.path.exists(gi):
-        # renders are large and regenerable; everything else is worth sharing
+        # renders are large and regenerable, _engine is a runtime copy of the
+        # package's renderer; everything else is worth sharing through git
         with open(gi, "w", encoding="utf-8") as fh:
-            fh.write("out/\nshots/\n")
+            fh.write("out/\nshots/\n_engine/\n")
     return d
 
 
