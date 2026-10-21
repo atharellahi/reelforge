@@ -62,6 +62,14 @@ publishes only when you say so. The claims rule is enforced by the build either
 way: a beat without a cited fact is cut and a label that is not in the product
 is dropped, whoever wrote it.
 
+**Custom scenes.** The beat that carries a feature can be a small JS file Claude
+writes (`type: "custom", scene: "scenes/x.js"`): the real UI reconstructed from
+the code, choreographed - photos flying into a drop zone, a cursor pressing the
+real button, a pill confirming. The engine loads it like any beat, the same
+checks apply, and a missing or broken file falls back to a generic beat. This is
+where motion-graphics quality comes from; generic beats are for context. See
+the skill's `references/scenes.md` and `example_scene.js`.
+
 `reelforge make` (Gemini writes) still works for one-click use in the UI.
 
 ## Fresh machine, step by step

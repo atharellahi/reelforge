@@ -416,9 +416,30 @@ function beatCta(g, c, lt, d) {
   if (up > 0) g.appendChild(el('div', 'pill on', esc(c.url || ''), `left:50%;top:${ty + 170 + size + 60}px;transform:translateX(-50%) scale(${up});font-size:${MODE === 'port' ? 40 : 34}px;padding:18px 40px;opacity:${clamp(up * 1.4)}`));
 }
 
+// --------------------------------------------------------- custom scenes
+// A beat whose motion is written by hand - by Claude or a person - as a small
+// JS file in the project (storyboard: type "custom", scene "scenes/x.js"). The
+// file calls registerScene(name, fn); fn(g, lt, d, ctx) draws the beat at local
+// time lt into group g, using the same helpers the built-in beats use. This is
+// how a feature's core moment gets real UI and real choreography instead of a
+// template.
+window.__scenes = {};
+window.registerScene = (name, fn) => { window.__scenes[name] = fn; };
+function cursor(g, x, y, pressed, opacity = 1) {
+  g.appendChild(el('div', 'abs', `<svg width="44" height="44" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+    `left:${x}px;top:${y}px;z-index:30;transform:scale(${pressed ? .9 : 1});opacity:${opacity};filter:drop-shadow(0 5px 10px rgba(0,0,0,.35))`));
+}
+const CTX = { W, H, MODE, LAY, B, FPS, el, img, src, esc, ease, easeIO, easeBack, lerp, clamp, rise, pop, typed, caret, fit, fmtNum, heading, lockup, cursor, drift };
+function customBeat(g, b, lt, d) {
+  const fn = window.__scenes[b.scene];
+  if (!fn) { beatCards(g, b, lt, d); return; }   // missing file: the generic beat, never a blank frame
+  try { fn(g, lt, d, Object.assign({}, CTX, { beat: b, hook: b, T })); }
+  catch (e) { beatCards(g, b, lt, d); }
+}
+
 // ----------------------------------------------------------------- frame
-const HOOKS = { counter: hookCounter, cards: hookCards, grid: hookGrid, clash: hookClash, typed: hookTyped, plate: hookPlate };
-const BEATS = { screen: beatScreen, cards: beatCards, stat: beatStat, list: beatList, quote: beatQuote };
+const HOOKS = { counter: hookCounter, cards: hookCards, grid: hookGrid, clash: hookClash, typed: hookTyped, plate: hookPlate, custom: customBeat };
+const BEATS = { screen: beatScreen, cards: beatCards, stat: beatStat, list: beatList, quote: beatQuote, custom: customBeat };
 
 function drawBeat(i, lt) {
   const tl = SB.timeline[i];
@@ -471,8 +492,15 @@ window.__imagesReady = () => Promise.all([...document.images].map(im => im.compl
   (SB.cta.images || []).forEach(p => list.add(p));
   SB.beats.forEach(b => { if (b.image) list.add(b.image); (b.items || []).forEach(it => it.image && list.add(it.image)); });
   if (B.logo) list.add(B.logo);
+  SB.beats.forEach(b => (b.images || []).forEach(p => list.add(p)));
+  (SB.hook.images || []).forEach(p => list.add(p));
   const imgs = [...list].map(p => new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = src(p); }));
-  Promise.all(imgs).then(() => document.fonts.ready).then(() => { paint(); window.__ready = true; });
+  // custom scene files load like scripts; a failure falls back to the generic beat
+  const scenes = new Set();
+  if (SB.hook.scene) scenes.add(SB.hook.scene);
+  SB.beats.forEach(b => { if (b.scene) scenes.add(b.scene); });
+  const loads = [...scenes].map(p => new Promise(r => { const s = document.createElement('script'); s.onload = s.onerror = r; s.src = src(p) + '?v=' + Date.now(); document.head.appendChild(s); }));
+  Promise.all(imgs.concat(loads)).then(() => document.fonts.ready).then(() => { paint(); window.__ready = true; });
 })();
 </script>
 </body>

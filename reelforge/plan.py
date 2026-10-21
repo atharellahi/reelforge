@@ -15,8 +15,9 @@ from . import gemini, memory
 RULES = open(os.path.join(os.path.dirname(__file__), "rules", "VIDEO_RULES.md"), encoding="utf-8").read()
 
 WPM = 150
-BEAT_TYPES = ("screen", "cards", "stat", "list", "quote")
-HOOK_VISUALS = ("counter", "cards", "grid", "clash", "typed")
+# "custom" = motion written by hand as a scene file (see the skill's references/scenes.md)
+BEAT_TYPES = ("screen", "cards", "stat", "list", "quote", "custom")
+HOOK_VISUALS = ("counter", "cards", "grid", "clash", "typed", "custom")
 
 SYSTEM = """You write short product videos that a motion-graphics renderer will
 build exactly as specified. You are given the product's FACTS (with evidence),
@@ -211,7 +212,17 @@ def normalize(sb, feature, aspect, platform, seconds, word_budget, project=None)
         b["callouts"] = [c for c in (b.get("callouts") or [])[:3] if _traceable(c.get("label"), corpus)]
         if b["type"] in ("cards", "list") and not b["items"]:
             b["type"] = "cards"  # single image + heading; the beat still stands on its fact
+        if b["type"] == "custom":
+            scene = str(b.get("scene") or "")
+            if not (project and scene and os.path.exists(os.path.join(project, scene))):
+                sb["warnings"] = sb.get("warnings", []) + [f"custom scene file not found: {scene or '(none)'} - rendered as cards"]
+                b["type"] = "cards"
         beats.append(b)
+    if sb["hook"].get("visual") == "custom":
+        scene = str(sb["hook"].get("scene") or "")
+        if not (project and scene and os.path.exists(os.path.join(project, scene))):
+            sb["warnings"] = sb.get("warnings", []) + [f"custom hook scene not found: {scene or '(none)'} - rendered as cards"]
+            sb["hook"]["visual"] = "cards"
     if not beats:
         raise RuntimeError("the writer produced no beat that cites a fact; add facts or a brief")
     sb["beats"] = beats[:8 if feature.get("overview") else 6]

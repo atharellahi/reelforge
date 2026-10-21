@@ -70,13 +70,27 @@ def ensure(project, sb, log=print):
               "Overhead flat-lay of the objects involved.",
               "Shot through a doorway or window, the scene partly framed.",
               "Golden-hour exterior version of the same idea."]
-    for i in range(n_hook):
-        variant = f"{base} {angles[i % len(angles)]}"
-        imgs.append(_cached(project, variant, _slot_aspect(sb, "hook"), log))
+    if h.get("image_prompts"):
+        imgs = [_cached(project, p, _slot_aspect(sb, "hook"), log) for p in h["image_prompts"][:8]]
+    else:
+        for i in range(n_hook):
+            variant = f"{base} {angles[i % len(angles)]}"
+            imgs.append(_cached(project, variant, _slot_aspect(sb, "hook"), log))
     h["images"] = imgs
 
     for b in sb["beats"]:
         t = b.get("type")
+        # any beat may ask for a list of photographs by prompt (custom scenes
+        # usually do); they arrive as b.images in the same order
+        if b.get("image_prompts"):
+            b["images"] = [_cached(project, p, _slot_aspect(sb, "card"), log) for p in b["image_prompts"][:8]]
+        if t == "custom":
+            if b.get("image_prompt") and not b.get("image"):
+                b["image"] = _cached(project, b["image_prompt"], _slot_aspect(sb, "beat"), log)
+            for it in b.get("items", []):
+                if it.get("image_prompt") and not it.get("image"):
+                    it["image"] = _cached(project, it["image_prompt"], _slot_aspect(sb, "card"), log)
+            continue
         if t == "screen":
             shot = _shot_for(project, b.get("screenshot"), portrait)
             if shot:

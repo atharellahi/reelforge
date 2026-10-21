@@ -99,6 +99,12 @@ Before writing, read `references/VIDEO_RULES.md`. The rules that matter most:
 - Headings <= 7 words, two lines max on screen. Don't repeat the product name every line.
 - Product film (`feature_id: "all"`): 4-7 beats, one feature per beat in the order a new
   user meets them, vary beat types, use at least 75% of the word budget.
+- **The beat that carries the feature deserves a custom scene.** The generic beat types
+  are templates; they cannot show *this* feature's moment. For the one or two beats that
+  matter, reconstruct the real UI from the code and choreograph it in a small JS file:
+  `type: "custom", scene: "scenes/<name>.js"`. See `references/scenes.md` and copy
+  `references/example_scene.js`. This is where the motion-graphics quality comes from;
+  a video made only of generic beats will look like a template, because it is one.
 
 ### 4. Build, then LOOK
 ```
