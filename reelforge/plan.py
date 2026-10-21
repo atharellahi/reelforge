@@ -117,7 +117,19 @@ aspect {aspect}, platform {platform}, target {seconds}s, word_budget {word_budge
 # House rules (abridged)
 {RULES[:6000]}
 """
-    sb = gemini.text(prompt, system=SYSTEM, as_json=True, temperature=0.7)
+    system = SYSTEM
+    if feature.get("overview"):
+        system += ("\n\nTHIS IS A WHOLE-PRODUCT FILM, not a feature short. The facts are "
+                   "prefixed with the feature they belong to. Write 4-7 beats, ONE feature "
+                   "per beat, in the order a new user would meet them. The hook names the "
+                   "problem the whole product solves. Each beat's heading is that feature's "
+                   "benefit, not its name. Use the budget: write at least "
+                   f"{int(word_budget * 0.75)} of the {word_budget} words - two spoken sentences per "
+                   "beat - so the film reaches its target length. Vary the beat types: never more "
+                   "than two `screen` beats in a row; use `cards` for a set of things and `quote` "
+                   "for a promise. Features available: " +
+                   ", ".join(feature.get("feature_names", [])))
+    sb = gemini.text(prompt, system=system, as_json=True, temperature=0.7)
     return normalize(sb, feature, aspect, platform, seconds, word_budget, project=project)
 
 
@@ -187,7 +199,7 @@ def normalize(sb, feature, aspect, platform, seconds, word_budget, project=None)
         beats.append(b)
     if not beats:
         raise RuntimeError("the writer produced no beat that cites a fact; add facts or a brief")
-    sb["beats"] = beats[:6]
+    sb["beats"] = beats[:8 if feature.get("overview") else 6]
     # the URL on screen comes from brand.json or nowhere. Left blank, the
     # writer invented "pixigenweb.com/upload" - a claim like any other.
     brand = C.read_json(os.path.join(project, "brand.json"), {}) if project else {}

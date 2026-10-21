@@ -12,8 +12,32 @@ import time
 from . import assets, check, config as C, gemini, memory, narrate, plan, render, scan
 
 
+OVERVIEW_IDS = ("all", "product", "overview", "whole")
+
+
+def overview_feature(features, per_feature=2, cap=24):
+    """A product film is written from the facts of EVERY feature. Each fact
+    is prefixed with its feature's name so the writer can group beats by
+    feature and the viewer meets them in order."""
+    product = features.get("product") or {}
+    feats = features.get("features", [])
+    facts, routes = [], []
+    for f in feats:
+        for x in f.get("facts", [])[:per_feature]:
+            facts.append({"text": f"[{f['name']}] {x['text']}", "evidence": x.get("evidence", "")})
+        routes += f.get("routes", []) or []
+    return {"id": "product_overview", "name": product.get("name") or "The product",
+            "one_line": product.get("one_line", ""), "why_it_matters": product.get("audience", ""),
+            "facts": facts[:cap], "routes": list(dict.fromkeys(routes))[:6], "visual": "",
+            "overview": True, "feature_names": [f["name"] for f in feats]}
+
+
 def pick_feature(project, features, feature_id=None, prompt=""):
     feats = features.get("features", [])
+    if feature_id and feature_id.lower() in OVERVIEW_IDS:
+        if not feats:
+            raise SystemExit("no features scanned yet: reelforge scan <repo>")
+        return overview_feature(features)
     if feature_id:
         for f in feats:
             if f["id"] == feature_id:
@@ -71,10 +95,29 @@ def make(repo, feature_id=None, prompt="", aspect="9:16", platform="shorts", sec
     project = C.project_dir(repo)
     features = C.read_json(os.path.join(project, "features.json"))
     if not features:
-        log("no features.json yet - scanning the repo first")
-        features = scan.scan(repo, project, log=log)
+        # Never scan silently. A missing features.json usually means the state
+        # lives on another branch; re-scanning here forks the product's facts
+        # and drops the brand and the tuning notes without anyone noticing.
+        hint = ""
+        try:
+            import subprocess
+            r = subprocess.run(["git", "-C", repo, "branch", "-a", "--format=%(refname:short)",
+                                "--contains", "HEAD"], capture_output=True, text=True, timeout=10)
+            branches = subprocess.run(["git", "-C", repo, "for-each-ref", "--format=%(refname:short)",
+                                       "refs/heads", "refs/remotes"], capture_output=True, text=True, timeout=10).stdout.split()
+            have = [b for b in branches if subprocess.run(
+                ["git", "-C", repo, "cat-file", "-e", f"{b}:.reelforge/features.json"],
+                capture_output=True).returncode == 0]
+            if have:
+                hint = (f"\nThe scan already exists on branch {have[0]}. Check it out or merge it in, "
+                        "rather than scanning again here.")
+        except Exception:
+            pass
+        raise SystemExit(f"No .reelforge/features.json in {repo}.{hint}\nTo scan this branch deliberately: reelforge scan {repo}")
     feature = pick_feature(project, features, feature_id, prompt)
-    log(f"feature: {feature['name']}  ({len(feature.get('facts', []))} facts)")
+    if feature.get("overview") and seconds <= 30:
+        seconds = 75  # a product film needs room for several features; the rules say 60-90s
+    log(f"feature: {feature['name']}  ({len(feature.get('facts', []))} facts{', whole-product overview' if feature.get('overview') else ''})")
 
     shots = []
     if base_url and feature.get("routes"):

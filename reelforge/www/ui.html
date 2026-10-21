@@ -201,7 +201,9 @@ async function load() {
 function renderAll() {
   // features
   const feats = (S.features && S.features.features) || [];
-  $('#mk-feature').innerHTML = '<option value="">(pick from scan, or write a brief)</option>' + feats.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
+  $('#mk-feature').innerHTML = '<option value="">(pick from scan, or write a brief)</option>' +
+    (feats.length ? '<option value="all">★ Whole product (60–90s film, every feature)</option>' : '') +
+    feats.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
   $('#feats').innerHTML = feats.map(f => `<div class="card"><h3>${esc(f.name)}</h3><div class="muted">${esc(f.one_line)}</div><ol>${(f.facts||[]).map(x => `<li>${esc(x.text)} <span class="muted">— ${esc(x.evidence)}</span></li>`).join('')}</ol></div>`).join('') || '<div class="muted">Not scanned yet.</div>';
   const b = S.brand || {};
   $('#brand').innerHTML = b.name ? `<h2>Brand</h2><div class="row"><span class="chip">${esc(b.name)}</span><span class="chip" style="background:${b.primary};color:#fff">${b.primary}</span><span class="chip" style="background:${b.accent}">${b.accent}</span><span class="chip">${esc(b.font_head)} / ${esc(b.font_body)}</span><span class="chip">${b.logo ? 'logo found' : 'no logo'}</span></div><p class="muted">Edit <code>.reelforge/brand.json</code> in the repo to correct any of these.</p>` : '<span class="muted">Brand appears after the first scan.</span>';
