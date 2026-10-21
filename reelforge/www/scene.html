@@ -354,24 +354,32 @@ function beatList(g, b, lt, d) {
     // image height gives way to the chips and the caption band below them
     const room = (SB.captions_on !== false ? LAY.capY - 50 : LAY.bottom) - LAY.top - 40 - LAY.h1 * 2.3 - items.length * 86;
     const ih = Math.max(380, Math.min(680, room));
-    g.appendChild(el('div', 'card', img(b.image || (items[0] && items[0].image)), `left:${LAY.pad}px;top:${LAY.top}px;width:${W - LAY.pad * 2}px;height:${ih}px;${pop(lt / .6)}`));
+    // the photo keeps zooming and the chips keep breathing after they land;
+    // this was the one beat type that went still and failed the motion check
+    const kz = 1 + .08 * clamp(lt / Math.max(d, 1));
+    g.appendChild(el('div', 'card', `<img src="${src(b.image || (items[0] && items[0].image))}" style="width:100%;height:100%;object-fit:cover;object-position:50% 30%;transform:scale(${kz});display:block" alt="">`,
+      `left:${LAY.pad}px;top:${LAY.top}px;width:${W - LAY.pad * 2}px;height:${ih}px;${pop(lt / .6)}`));
     let y = heading(g, b.heading, '', lt, LAY.top + ih + 40);
     items.forEach((it, i) => {
       const p = easeBack((lt - .5 - i * .09) / .5);
       if (p <= 0) return;
+      const bob = Math.sin(lt * 1.5 + i * 1.9) * 5;
       g.appendChild(el('div', 'chip', `<b>${esc(it.title)}</b><span style="font-weight:500;color:var(--t2)">${esc(it.sub)}</span>`,
-        `position:absolute;left:${LAY.pad + (1 - p) * 60}px;top:${y + i * 86}px;font-size:28px;opacity:${clamp(p * 1.4)};max-width:${W - LAY.pad * 2}px;overflow:hidden`));
+        `position:absolute;left:${LAY.pad + (1 - p) * 60 + bob}px;top:${y + i * 86}px;font-size:28px;opacity:${clamp(p * 1.4)};max-width:${W - LAY.pad * 2}px;overflow:hidden`));
     });
   } else {
     heading(g, b.heading, '', lt, LAY.top + 60);
     items.forEach((it, i) => {
       const p = easeBack((lt - .5 - i * .09) / .5);
       if (p <= 0) return;
+      const bob = Math.sin(lt * 1.5 + i * 1.9) * 5;
       g.appendChild(el('div', 'chip', `<b>${esc(it.title)}</b><span style="font-weight:500;color:var(--t2)">${esc(it.sub)}</span>`,
-        `position:absolute;left:${LAY.pad + (1 - p) * 60}px;top:${LAY.top + 300 + i * 86}px;font-size:28px;opacity:${clamp(p * 1.4)}`));
+        `position:absolute;left:${LAY.pad + (1 - p) * 60 + bob}px;top:${LAY.top + 300 + i * 86}px;font-size:28px;opacity:${clamp(p * 1.4)}`));
     });
     const cw = 760, ch = 820;
-    g.appendChild(el('div', 'card', img(b.image || (items[0] && items[0].image)), `left:${W - LAY.pad - cw}px;top:${LAY.top + 40}px;width:${cw}px;height:${ch}px;${pop(lt / .6)}`));
+    const kz = 1 + .08 * clamp(lt / Math.max(d, 1));
+    g.appendChild(el('div', 'card', `<img src="${src(b.image || (items[0] && items[0].image))}" style="width:100%;height:100%;object-fit:cover;object-position:50% 30%;transform:scale(${kz});display:block" alt="">`,
+      `left:${W - LAY.pad - cw}px;top:${LAY.top + 40}px;width:${cw}px;height:${ch}px;${pop(lt / .6)}`));
   }
 }
 
