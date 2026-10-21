@@ -14,7 +14,9 @@ import glob
 import json
 import os
 import platform
+import re
 import shutil
+import subprocess
 import sys
 
 HOME = os.path.expanduser(os.environ.get("REELFORGE_HOME", "~/.reelforge"))
@@ -202,6 +204,40 @@ def remember_product(name, repo, extra_repos=None):
                   "extra_repos": list(extra_repos or []), "at": time.strftime("%Y-%m-%d")})
     write_json(PRODUCTS, {"products": ps[:40]})
     return ps
+
+
+# Repos referenced from project.json must work on every teammate's machine,
+# so they are stored as git URLs, never as one laptop's absolute path. Each
+# machine keeps its own alias table from URL back to a local checkout, so
+# the same repo is not cloned a second time next to the one you work in.
+ALIASES = os.path.join(HOME, "repo_aliases.json")
+
+
+def aliases():
+    return read_json(ALIASES, {}) or {}
+
+
+def remember_alias(url, path):
+    a = aliases()
+    a[url] = os.path.abspath(path)
+    write_json(ALIASES, a)
+
+
+def portable_repo(src):
+    """A git URL as given; a local checkout becomes its origin URL (and is
+    remembered as the alias for it here); a plain folder stays a path."""
+    if re.match(r"^(https?://|git@)", src):
+        return src
+    p = os.path.abspath(src)
+    try:
+        url = subprocess.run(["git", "-C", p, "remote", "get-url", "origin"],
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+    except Exception:
+        url = ""
+    if url:
+        remember_alias(url, p)
+        return url
+    return p
 
 
 def project_meta(project):

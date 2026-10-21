@@ -25,6 +25,10 @@ def resolve_repo(src):
     """A local path is used in place. A git URL is cloned shallowly under
     ~/.reelforge/repos and pulled on later runs."""
     if re.match(r"^(https?://|git@)", src):
+        # a checkout of this URL already on this machine wins over a fresh clone
+        local = C.aliases().get(src)
+        if local and os.path.isdir(local):
+            return local
         path = urlparse(src.replace("git@", "https://").replace(":", "/", 1)).path.strip("/")
         parts = re.sub(r"\.git$", "", path).split("/")
         # org-qualified, so acme/api and globex/api do not clone onto each other
@@ -313,9 +317,10 @@ def scan(repo, project, brief=None, log=print, extra_repos=()):
     # every label a video puts on screen must exist somewhere in the product;
     # the UI strings are that somewhere, kept beside the features
     C.write_json(os.path.join(project, "ui_strings.json"), sorted(set(all_strings)))
+    portable = [C.portable_repo(r) for r in extra_repos if r]
     C.save_project_meta(project, {"name": (data.get("product") or {}).get("name") or labels[0],
-                                  "extra_repos": list(extra_repos)})
-    C.remember_product((data.get("product") or {}).get("name") or labels[0], repo, list(extra_repos))
+                                  "extra_repos": portable})
+    C.remember_product((data.get("product") or {}).get("name") or labels[0], repo, portable)
     bpath = os.path.join(project, "brand.json")
     if not os.path.exists(bpath):
         b = detect_brand(repo, project)
