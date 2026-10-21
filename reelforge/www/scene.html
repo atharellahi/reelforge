@@ -137,13 +137,16 @@ function hookCounter(g, h, lt, d) {
   const val = h.value || 10, unit = h.unit || '';
   const p = easeIO(lt / Math.min(1.8, d * .55));
   const n = fmtNum(val * p);
-  const big = MODE === 'port' ? 300 : 240;
-  const cardW = MODE === 'port' ? 560 : 520, cardH = MODE === 'port' ? 820 : 300;
+  const big = MODE === 'port' ? 300 : 260;
+  // landscape: the photograph fills the right column and the number sits at
+  // the vertical centre of the left one. Top-anchored offsets left the bottom
+  // 60% of a 16:9 frame empty.
+  const cardW = MODE === 'port' ? 560 : 920, cardH = MODE === 'port' ? 820 : 560;
   const cp = easeBack(lt / .7);
-  const cx = MODE === 'port' ? W - cardW - LAY.pad + (1 - cp) * 420 : W - cardW - LAY.pad + (1 - cp) * 420;
-  const cy = MODE === 'port' ? LAY.top + 60 : LAY.top + 40;
+  const cx = W - cardW - LAY.pad + (1 - cp) * 420;
+  const cy = MODE === 'port' ? LAY.top + 60 : (H - cardH) / 2;
   g.appendChild(el('div', 'card', img(h.images[0]), `left:${cx}px;top:${cy}px;width:${cardW}px;height:${cardH}px;transform:rotate(${lerp(-10, -4, cp)}deg);opacity:${clamp(cp * 1.4)}`));
-  const ny = MODE === 'port' ? LAY.top + 700 : LAY.top + 60;
+  const ny = MODE === 'port' ? LAY.top + 700 : H / 2 - 290;
   g.appendChild(el('div', 'num', `${n}<span style="font-size:${big * .34}px;margin-left:14px;color:var(--a2)">${esc(unit)}</span>`,
     `position:absolute;left:${LAY.pad}px;top:${ny}px;font-size:${big}px;${rise(lt / .4, 40)}`));
   const t = typed(h.text || '', lt, .35, .045);
@@ -153,9 +156,9 @@ function hookCounter(g, h, lt, d) {
 
 function hookCards(g, h, lt, d) {
   const n = Math.min(3, h.images.length);
-  const cw = MODE === 'port' ? 520 : 360, ch = MODE === 'port' ? 760 : 520;
-  const cxs = MODE === 'port' ? [W / 2 - cw / 2 - 150, W / 2 - cw / 2, W / 2 - cw / 2 + 150] : [W - 1180, W - 820, W - 460];
-  const cy = MODE === 'port' ? LAY.top + 40 : LAY.top + 20;
+  const cw = MODE === 'port' ? 520 : 440, ch = MODE === 'port' ? 760 : 660;
+  const cxs = MODE === 'port' ? [W / 2 - cw / 2 - 150, W / 2 - cw / 2, W / 2 - cw / 2 + 150] : [W - 1340, W - 980, W - 620];
+  const cy = MODE === 'port' ? LAY.top + 40 : (H - ch) / 2 - 30;
   // After the whip-in the cards keep breathing, and every 2.2s one of them
   // lifts - the "punctuate every ~2s" rule. Without this a long hook line left
   // the picture sitting still for five seconds.
@@ -170,8 +173,8 @@ function hookCards(g, h, lt, d) {
       `left:${cxs[i] + (1 - p) * 500}px;top:${cy + i * 26 + bob - lift * 34}px;width:${cw}px;height:${ch}px;` +
       `transform:rotate(${lerp(14, [-7, 0, 7][i], p) + Math.sin(lt * .9 + i) * 1.4}deg) scale(${1 + lift * .05});opacity:${clamp(p * 1.5)};z-index:${i === lifted ? 5 : i}`));
   }
-  const ty = MODE === 'port' ? cy + ch + 70 : LAY.top + 40;
-  const tw = MODE === 'port' ? W - LAY.pad * 2 : LAY.col;
+  const ty = MODE === 'port' ? cy + ch + 70 : H / 2 - 120;
+  const tw = MODE === 'port' ? W - LAY.pad * 2 : 520;
   g.appendChild(el('div', 'hd', esc(h.text), `position:absolute;left:${LAY.pad}px;top:${ty}px;width:${tw}px;font-size:${fit(h.text, LAY.h1 * 1.05, 22)}px;${rise((lt - .5) / .5, 40)}`));
 }
 
@@ -179,9 +182,9 @@ function hookGrid(g, h, lt, d) {
   const cols = MODE === 'port' ? 2 : 3, rows = MODE === 'port' ? 3 : 2;
   const gw = W - LAY.pad * 2, gap = 18;
   const cw = (gw - gap * (cols - 1)) / cols;
-  const areaH = (MODE === 'port' ? 1000 : 640);
+  const areaH = (MODE === 'port' ? 1000 : 860);
   const ch = (areaH - gap * (rows - 1)) / rows;
-  const y0 = MODE === 'port' ? LAY.top + 20 : LAY.top + 10;
+  const y0 = MODE === 'port' ? LAY.top + 20 : (H - areaH) / 2;
   for (let i = 0; i < cols * rows; i++) {
     const p = easeBack((lt - i * .09) / .5);
     if (p <= 0) continue;
@@ -194,9 +197,9 @@ function hookGrid(g, h, lt, d) {
 }
 
 function hookClash(g, h, lt, d) {
-  const cw = MODE === 'port' ? 470 : 420, ch = MODE === 'port' ? 700 : 560;
+  const cw = MODE === 'port' ? 470 : 560, ch = MODE === 'port' ? 700 : 640;
   const p = easeBack(lt / .62);
-  const cy = MODE === 'port' ? LAY.top + 60 : LAY.top + 10;
+  const cy = MODE === 'port' ? LAY.top + 60 : (H - ch) / 2 - 70;
   const lx = lerp(-cw, W / 2 - cw - 14, p), rx = lerp(W, W / 2 + 14, p);
   g.appendChild(el('div', 'card', img(h.images[0]), `left:${lx}px;top:${cy}px;width:${cw}px;height:${ch}px;transform:rotate(${lerp(-12, -3, p)}deg)`));
   g.appendChild(el('div', 'card', img(h.images[1] || h.images[0]), `left:${rx}px;top:${cy + 30}px;width:${cw}px;height:${ch}px;transform:rotate(${lerp(12, 3, p)}deg)`));
@@ -251,7 +254,7 @@ function beatScreen(g, b, lt, d) {
     g.appendChild(el('div', 'brw', `<div class="bar"><i></i><i></i><i></i></div><div class="scr">${inner}</div>`,
       `left:${bx + (1 - enter) * 160}px;top:${by}px;width:${bw}px;height:${bh}px;opacity:${clamp(enter * 1.3)}`));
     if (b.real) callouts(g, b, lt, bx, by + 44, bw, bh - 44);
-    else g.appendChild(el('div', 'tag', 'illustration', `left:${bx + bw - 180}px;top:${by - 42}px`));
+    else g.appendChild(el('div', 'tag', 'illustration', `left:${bx + bw - 180}px;top:${by + bh + 14}px`));
   }
 }
 

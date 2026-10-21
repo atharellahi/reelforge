@@ -184,6 +184,16 @@ description, tags, caption - drafted, editable).
 
     reelforge check <repo> <job>     # re-run the checks on an existing render
 
+**Whole-product film:** `--feature all` (or ★ Whole product in the UI) draws
+two facts from every feature, writes 4-7 beats in the order a new user meets
+them, and targets 60-90s. Aspect ratios: `--aspect 9:16` (default), `16:9`,
+`1:1`, `4:5` - each is its own layout, not a crop.
+
+**Branches:** `make` refuses to run on a branch that has no `.reelforge/`
+state and names the branch that has it. It used to re-scan silently, which
+forked the facts, replaced the brand with defaults and dropped the tuning
+notes without anyone noticing.
+
 The on-screen URL comes from `brand.json` and nowhere else. If it is blank the
 CTA shows no link and the job records a warning, rather than letting the
 writer invent one.

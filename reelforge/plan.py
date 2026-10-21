@@ -130,7 +130,22 @@ aspect {aspect}, platform {platform}, target {seconds}s, word_budget {word_budge
                    "for a promise. Features available: " +
                    ", ".join(feature.get("feature_names", [])))
     sb = gemini.text(prompt, system=system, as_json=True, temperature=0.7)
-    return normalize(sb, feature, aspect, platform, seconds, word_budget, project=project)
+    sb = normalize(sb, feature, aspect, platform, seconds, word_budget, project=project)
+    # The writer under-fills long films even when told the floor (a 75s brief
+    # came back at 33s, then 41s). One expansion pass: same structure, same
+    # facts, longer spoken lines.
+    if feature.get("overview") and sb["word_count"] < 0.7 * word_budget:
+        import json as _json
+        longer = gemini.text(
+            "Expand the spoken lines of this storyboard so the total narration is between "
+            f"{int(word_budget * 0.8)} and {word_budget} words. Keep every key, every beat, every "
+            "fact_id and all on-screen text exactly as they are; only make `line` fields longer - "
+            "two or three spoken sentences each, concrete, no new claims. Return the full JSON.\n\n"
+            + _json.dumps(sb), system=system, as_json=True, temperature=0.5)
+        if isinstance(longer, dict) and longer.get("beats"):
+            longer["hook"]["images"] = sb["hook"].get("images", [])
+            sb = normalize(longer, feature, aspect, platform, seconds, word_budget, project=project)
+    return sb
 
 
 def _words(s):
