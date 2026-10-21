@@ -280,6 +280,36 @@ def _evidence(repo, label, budget):
     return text[:budget], rt, st, (len(rd), len(rt), len(st))
 
 
+def collect(repo, project, extra_repos=(), log=print):
+    """Gather the evidence WITHOUT asking a model what it means. For when the
+    reader is Claude Code, which explores the repo itself and writes
+    features.json by hand: this gives it the routes, strings and README in one
+    file, and fills ui_strings.json so the label check has something to check."""
+    extra = [resolve_repo(r) for r in extra_repos if r]
+    repos = [repo] + extra
+    labels = [os.path.basename(r.rstrip("/\\")) for r in repos]
+    parts, all_routes, all_strings = [], [], []
+    for r, label in zip(repos, labels):
+        text, rt, st, (nrd, nrt, nst) = _evidence(r, label, 400000)
+        parts.append(text); all_routes += rt; all_strings += [s["text"] for s in st]
+        log(f"  {label}: README {nrd} chars, {nrt} routes, {nst} UI strings")
+    path = os.path.join(project, "evidence.md")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("# Evidence collected by reelforge - read this, then read the code it points at\n\n")
+        fh.write("\n\n".join(parts))
+    C.write_json(os.path.join(project, "ui_strings.json"), sorted(set(all_strings)))
+    C.write_json(os.path.join(project, "routes.json"), all_routes)
+    meta = C.project_meta(project)
+    C.save_project_meta(project, {"name": meta.get("name") or labels[0],
+                                  "extra_repos": [C.portable_repo(r) for r in extra_repos if r] or meta.get("extra_repos", [])})
+    bpath = os.path.join(project, "brand.json")
+    if not os.path.exists(bpath):
+        C.write_json(bpath, detect_brand(repo, project))
+        log("  brand.json drafted from CSS variables and the logo file - check name, url and colours")
+    log(f"  -> {path}")
+    return path
+
+
 def scan(repo, project, brief=None, log=print, extra_repos=()):
     """One product may span several repositories - a front-end and the
     back-end behind it. The primary repo owns .reelforge/; every repo's

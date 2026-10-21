@@ -31,4 +31,4 @@ reelforge = "reelforge.cli:main"
 include = ["reelforge*"]
 
 [tool.setuptools.package-data]
-reelforge = ["www/*", "rules/*"]
+reelforge = ["www/*", "rules/*", "skill/reelforge/*", "skill/reelforge/references/*"]

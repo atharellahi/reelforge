@@ -129,11 +129,54 @@ def make(repo, feature_id=None, prompt="", aspect="9:16", platform="shorts", sec
     log("writing storyboard")
     sb = plan.write(project, feature, brief=prompt, aspect=aspect, platform=platform,
                     seconds=seconds, shots=shot_hint)
+    sb["author"] = "gemini"
     log(f"  {len(sb['beats'])} beats, hook={sb['hook']['visual']}, {sb['word_count']}/{sb['word_budget']} words")
+    return produce(repo, project, feature, sb, voice=voice, veo=veo, captions=captions,
+                   log=log, job_id=job_id, t0=t0)
 
+
+def build(repo, storyboard_path, aspect=None, voice="gemini", veo=False, captions=True,
+          log=print, job_id=None):
+    """Build a storyboard somebody else wrote - Claude, or a person - instead of
+    asking Gemini for one. The same validation applies: every beat must cite a
+    fact from features.json, every label must exist in the product, the URL
+    comes from brand.json. Only the WRITING changes hands; the claims rule
+    does not."""
+    t0 = time.time()
+    project = C.project_dir(repo)
+    features = C.read_json(os.path.join(project, "features.json"))
+    if not features:
+        raise SystemExit(f"No .reelforge/features.json in {repo}. Write one (see the skill's "
+                         "references/storyboard.md) or run: reelforge scan {repo}")
+    sb = C.read_json(storyboard_path)
+    if not sb or "beats" not in sb or "hook" not in sb:
+        raise SystemExit(f"{storyboard_path} is not a storyboard (needs hook, beats, cta)")
+    fid = str(sb.get("feature_id") or "")
+    feature = overview_feature(features) if fid.lower() in OVERVIEW_IDS + ("product_overview",) \
+        else pick_feature(project, features, fid or None, sb.get("brief", ""))
+    aspect = aspect or sb.get("aspect") or "9:16"
+    platform = sb.get("platform") or ("youtube" if aspect == "16:9" else "shorts")
+    seconds = int(sb.get("seconds") or (75 if feature.get("overview") else 30))
+    word_budget = int(seconds / 60 * plan.WPM * 0.9)
+    sb = plan.normalize(sb, feature, aspect, platform, seconds, word_budget, project=project)
+    sb["author"] = sb.get("author") or "claude"
+    log(f"storyboard by {sb['author']}: {len(sb['beats'])} beats, hook={sb['hook']['visual']}, "
+        f"{sb['word_count']}/{sb['word_budget']} words")
+    for b in sb["beats"]:
+        if b.get("dropped_items"):
+            log(f"  dropped untraceable labels: {b['dropped_items']}")
+    return produce(repo, project, feature, sb, voice=voice, veo=veo, captions=captions,
+                   log=log, job_id=job_id, t0=t0)
+
+
+def produce(repo, project, feature, sb, voice="gemini", veo=False, captions=True,
+            log=print, job_id=None, t0=None):
+    """Everything after the storyboard: pictures, voice, timeline, frames, checks."""
+    t0 = t0 or time.time()
     job_id = job_id or time.strftime("%Y%m%d-%H%M%S") + "_" + re.sub(r"[^a-z0-9]+", "-", feature["id"])[:30]
     job_dir = os.path.join(project, "out", job_id)
     os.makedirs(job_dir, exist_ok=True)
+    aspect, platform = sb.get("aspect", "9:16"), sb.get("platform", "shorts")
 
     log("imagery")
     assets.ensure(project, sb, log=log)
@@ -164,6 +207,7 @@ def make(repo, feature_id=None, prompt="", aspect="9:16", platform="shorts", sec
         "id": job_id, "feature_id": feature["id"], "feature": feature["name"],
         "title": sb.get("title") or feature["name"], "created": time.strftime("%Y-%m-%d %H:%M"),
         "aspect": aspect, "platform": platform, "duration": sb["duration"],
+        "author": sb.get("author", "gemini"),
         "file": "final.mp4", "thumb": "thumb.jpg", "voice": engine, "veo": bool(sb["hook"].get("plate_frames")),
         "meta": {
             "youtube_title": (sb.get("meta") or {}).get("youtube_title", "")[:100],

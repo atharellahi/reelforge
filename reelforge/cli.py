@@ -106,6 +106,59 @@ def cmd_make(a):
     print(f"\njob {meta['id']}  {'all checks passed' if meta['check']['ok'] else 'CHECKS FAILED - review before publishing'}")
 
 
+def cmd_collect(a):
+    from . import scan
+    repo = scan.resolve_repo(a.repo)
+    project = C.project_dir(repo)
+    extra = a.with_repo or C.project_meta(project).get("extra_repos") or []
+    path = scan.collect(repo, project, extra_repos=extra, log=_log)
+    print(f"\nread {path}, then write {os.path.join(project, 'features.json')}")
+
+
+def cmd_build(a):
+    from . import make, scan
+    repo = scan.resolve_repo(a.repo)
+    meta = make.build(repo, a.storyboard, aspect=a.aspect, voice=a.voice, veo=a.veo,
+                      captions=not a.no_captions, log=_log)
+    print(f"\njob {meta['id']}  {'all checks passed' if meta['check']['ok'] else 'CHECKS FAILED - look at the sheet before publishing'}")
+    print(f"sheet: reelforge sheet {a.repo} {meta['id']}")
+
+
+def cmd_sheet(a):
+    from . import scan, sheet
+    repo = scan.resolve_repo(a.repo)
+    project = C.project_dir(repo)
+    job = a.job
+    if job == "latest":
+        from . import make
+        jobs = make.list_jobs(project)
+        if not jobs:
+            sys.exit("no jobs yet")
+        job = jobs[0]["id"]
+    out, times = sheet.make(os.path.join(project, "out", job), out=a.out)
+    print(out)
+    print("frames at:", " ".join(f"{t:.1f}s" for t in times))
+
+
+def cmd_skill(a):
+    """Install the Claude Code skill that drives reelforge: Claude explores the
+    repo and writes the storyboard; reelforge builds, checks and publishes."""
+    import shutil
+    src = os.path.join(os.path.dirname(__file__), "skill", "reelforge")
+    if a.action == "path":
+        print(src); return
+    if a.action == "install":
+        dest = os.path.join(a.project, ".claude", "skills", "reelforge") if a.project \
+            else os.path.expanduser("~/.claude/skills/reelforge")
+        if os.path.isdir(dest):
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
+        where = "this project" if a.project else "your user account (every project)"
+        print(f"  installed the reelforge skill for {where}:\n  {dest}")
+        print("  In Claude Code, ask for a video - e.g. \"make a 30s short about the upload feature\" - "
+              "or type /reelforge.")
+
+
 def cmd_products(a):
     """A product = a primary repo (owns .reelforge/) + any extra repos whose
     code is also evidence. The list is per machine; the definition travels
@@ -285,6 +338,20 @@ def main(argv=None):
     j = sub.add_parser("jobs"); j.add_argument("repo"); j.set_defaults(fn=cmd_jobs)
 
     k = sub.add_parser("check"); k.add_argument("repo"); k.add_argument("job"); k.set_defaults(fn=cmd_check)
+
+    co = sub.add_parser("collect", help="gather evidence for a human or Claude to write features.json from (no model call)")
+    co.add_argument("repo"); co.add_argument("--with", dest="with_repo", action="append", metavar="REPO"); co.set_defaults(fn=cmd_collect)
+
+    b = sub.add_parser("build", help="build a storyboard written by Claude or a person")
+    b.add_argument("repo"); b.add_argument("storyboard")
+    b.add_argument("--aspect", choices=["9:16", "16:9", "1:1", "4:5"]); b.add_argument("--voice", default="gemini", choices=["gemini", "edge"])
+    b.add_argument("--veo", action="store_true"); b.add_argument("--no-captions", action="store_true"); b.set_defaults(fn=cmd_build)
+
+    sh = sub.add_parser("sheet", help="contact sheet of a render, to look at"); sh.add_argument("repo"); sh.add_argument("job", help="job id or 'latest'")
+    sh.add_argument("--out"); sh.set_defaults(fn=cmd_sheet)
+
+    sk = sub.add_parser("skill", help="the Claude Code skill"); sk.add_argument("action", choices=["install", "path"])
+    sk.add_argument("--project", help="install into this repo's .claude/skills instead of your user account"); sk.set_defaults(fn=cmd_skill)
 
     u = sub.add_parser("publish"); u.add_argument("repo"); u.add_argument("job")
     u.add_argument("--youtube", metavar="LABEL_OR_CHANNEL", help="an account label, a channel id, or 'default' for the product's default channel")

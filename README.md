@@ -20,6 +20,26 @@ Needs Python 3.10+, ffmpeg, and Chrome (or Edge / Chromium).
 Optional, recommended: `pip install "reelforge[check]"` adds faster-whisper for
 exact narration cuts and a spoken-vs-scripted check.
 
+## The Claude Code skill (recommended)
+
+The two steps that decide quality - understanding the product and writing the
+storyboard - are better done by Claude Code, which explores the repo as an
+agent, than by the CLI's built-in writer. The skill hands those two steps to
+Claude and keeps everything mechanical in the CLI.
+
+    reelforge skill install            # into ~/.claude/skills (every project)
+    reelforge skill install --project <repo>   # or just this repo
+
+Then, in Claude Code, ask for a video: *"make a 30s short about the upload
+feature"*, *"a 75s product film in 16:9"*, *"re-render with a calmer hook"*.
+Claude runs `reelforge collect`, reads the code, writes `features.json` and the
+storyboard, runs `reelforge build`, looks at `reelforge sheet`, iterates, and
+publishes only when you say so. The claims rule is enforced by the build either
+way: a beat without a cited fact is cut and a label that is not in the product
+is dropped, whoever wrote it.
+
+`reelforge make` (Gemini writes) still works for one-click use in the UI.
+
 ## Fresh machine, step by step
 
 Nothing here depends on any other machine being on.
