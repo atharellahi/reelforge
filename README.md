@@ -10,15 +10,39 @@ publishes to whichever YouTube channel or Instagram account you choose.
 Nothing runs on a server. Each person installs it, adds their own keys, and
 the project's shared state (features, brand, corrections) lives in the repo.
 
-## Install
+## Install: one command
 
-Needs Python 3.10+, ffmpeg, and Chrome (or Edge / Chromium).
+Installs whatever is missing (Python, git, ffmpeg, Chrome), then reelforge and
+its Claude Code skill. Safe to re-run.
 
-    pip install git+https://github.com/<org>/reelforge.git
+    # Windows (PowerShell)
+    irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex
+
+    # macOS / Linux
+    curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash
+
+While the repo is private the raw URLs need GitHub access: run `gh auth login`
+once, then `gh api -H "Accept: application/vnd.github.raw"
+repos/atharellahi/reelforge/contents/install.sh | bash` (Windows: `install.ps1 | iex`).
+
+Then put your Gemini key in `~/.reelforge/.env` (the installer creates the
+file), open Claude Code in your project and ask for a video. Claude does the
+rest, including opening the UI if you ask for it.
+
+### Manual install
+
+    pip install pipx && pipx ensurepath          # new terminal after this
+    pipx install git+https://github.com/atharellahi/reelforge.git
+    pipx inject reelforge faster-whisper          # optional: exact cuts + voice check
+    reelforge skill install
     reelforge doctor
 
-Optional, recommended: `pip install "reelforge[check]"` adds faster-whisper for
-exact narration cuts and a spoken-vs-scripted check.
+### Keys
+
+Read from, nearest first: `<repo>/.reelforge/.env` (gitignored), `<repo>/.env`,
+`~/.reelforge/.env`, then `~/.reelforge/config.json`. Names: `GEMINI_API_KEY`,
+`YOUTUBE_CLIENT_SECRET` (path), `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID`,
+`VEO_API_KEY`, `VEO_PROJECT`. The process environment overrides all of them.
 
 ## The Claude Code skill (recommended)
 

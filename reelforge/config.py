@@ -51,7 +51,53 @@ def ensure_home():
     os.makedirs(os.path.join(HOME, "repos"), exist_ok=True)
 
 
-def load():
+# .env files, nearest first: the project's own (.reelforge/.env, gitignored),
+# a .env in the current directory, then the personal one in ~/.reelforge.
+# Keys there are read every time; nothing is copied into config.json.
+ENV_ALIASES = {
+    "GEMINI_API_KEY": "gemini_api_key", "GOOGLE_API_KEY": "gemini_api_key",
+    "YOUTUBE_CLIENT_SECRET": "youtube_client_secret",
+    "INSTAGRAM_ACCESS_TOKEN": "instagram_access_token", "INSTAGRAM_USER_ID": "instagram_user_id",
+    "VEO_API_KEY": "veo_api_key", "VEO_PROJECT": "veo_project",
+    "AWS_ACCESS_KEY_ID": "s3_access_key_id", "AWS_SECRET_ACCESS_KEY": "s3_secret_access_key",
+    "S3_BUCKET": "s3_bucket", "S3_REGION": "s3_region",
+    "CHROME_PATH": "chrome_path", "FFMPEG_PATH": "ffmpeg_path",
+}
+
+
+def _read_env_file(path):
+    out = {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                v = v.strip().strip('"').strip("'")
+                if v:
+                    out[k.strip().upper()] = v
+    except OSError:
+        pass
+    return out
+
+
+def env_files(repo=None):
+    paths = []
+    if repo:
+        paths.append(os.path.join(os.path.abspath(repo), ".reelforge", ".env"))
+        paths.append(os.path.join(os.path.abspath(repo), ".env"))
+    paths.append(os.path.join(os.getcwd(), ".reelforge", ".env"))
+    paths.append(os.path.join(os.getcwd(), ".env"))
+    paths.append(os.path.join(HOME, ".env"))
+    seen, out = set(), []
+    for p in paths:
+        if p not in seen and os.path.exists(p):
+            seen.add(p); out.append(p)
+    return out
+
+
+def load(repo=None):
     ensure_home()
     cfg = dict(DEFAULTS)
     if os.path.exists(CONFIG):
@@ -60,13 +106,22 @@ def load():
                 cfg.update(json.load(fh))
         except Exception as e:  # a corrupt config should not brick the tool
             print(f"warning: could not read {CONFIG}: {e}", file=sys.stderr)
-    # environment wins, so CI and shared machines need no file at all
+    # .env files override config.json; nearest file wins
+    merged = {}
+    for p in reversed(env_files(repo or _ACTIVE_REPO)):
+        merged.update(_read_env_file(p))
+    for k, v in merged.items():
+        key = ENV_ALIASES.get(k) or (k[len("REELFORGE_"):].lower() if k.startswith("REELFORGE_") else None)
+        if key in DEFAULTS:
+            cfg[key] = v
+    # the process environment wins over everything
     for k in DEFAULTS:
         env = os.environ.get("REELFORGE_" + k.upper())
         if env:
             cfg[k] = env
-    if not cfg["gemini_api_key"]:
-        cfg["gemini_api_key"] = os.environ.get("GEMINI_API_KEY", "")
+    for env_name, key in ENV_ALIASES.items():
+        if os.environ.get(env_name) and not os.environ.get("REELFORGE_" + key.upper()):
+            cfg[key] = os.environ[env_name]
     return cfg
 
 
@@ -156,7 +211,14 @@ def find_chrome(cfg=None):
 
 # --------------------------------------------------------------- project
 
+_ACTIVE_REPO = None
+
+
 def project_dir(repo):
+    # every repo-bound command starts here, so this is where the project's own
+    # .reelforge/.env becomes visible to load() calls made deeper in the stack
+    global _ACTIVE_REPO
+    _ACTIVE_REPO = os.path.abspath(repo)
     d = os.path.join(os.path.abspath(repo), ".reelforge")
     for sub in ("out", "assets", "shots", "looks"):
         os.makedirs(os.path.join(d, sub), exist_ok=True)
@@ -165,7 +227,15 @@ def project_dir(repo):
         # renders are large and regenerable, _engine is a runtime copy of the
         # package's renderer; everything else is worth sharing through git
         with open(gi, "w", encoding="utf-8") as fh:
-            fh.write("out/\nshots/\n_engine/\n")
+            fh.write("out/\nshots/\n_engine/\n.env\n")
+    else:
+        # older projects: make sure a keys file can never be committed
+        try:
+            if ".env" not in open(gi, encoding="utf-8").read():
+                with open(gi, "a", encoding="utf-8") as fh:
+                    fh.write(".env\n")
+        except OSError:
+            pass
     # The same rules in the clone's own exclude file, which no branch can
     # remove. Otherwise a branch that has not merged .reelforge/.gitignore yet
     # shows every render as an untracked file.
@@ -173,7 +243,7 @@ def project_dir(repo):
     if os.path.isdir(os.path.dirname(exclude)):
         try:
             have = open(exclude, encoding="utf-8").read() if os.path.exists(exclude) else ""
-            missing = [r for r in (".reelforge/out/", ".reelforge/shots/", ".reelforge/_engine/") if r not in have]
+            missing = [r for r in (".reelforge/out/", ".reelforge/shots/", ".reelforge/_engine/", ".reelforge/.env") if r not in have]
             if missing:
                 with open(exclude, "a", encoding="utf-8") as fh:
                     fh.write(("\n" if have and not have.endswith("\n") else "") + "# reelforge\n" + "\n".join(missing) + "\n")

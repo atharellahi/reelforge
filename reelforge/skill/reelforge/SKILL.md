@@ -24,9 +24,40 @@ reelforge sheet <repo> latest         # contact sheet -> Read it and judge
 reelforge publish <repo> <job> --youtube <label> --privacy unlisted
 ```
 
-If `reelforge` is missing: `pip install pipx && pipx ensurepath && pipx install git+https://github.com/atharellahi/reelforge.git`,
-then a new terminal. Keys live in `~/.reelforge/config.json` (`reelforge config set gemini_api_key ...`).
-A Gemini key is required even here: it generates the imagery and the voice.
+## Step 0: make sure the machine is ready (do this yourself, do not send the user to a README)
+
+Run `reelforge doctor`. If the command does not exist, install everything with ONE command
+and then re-run doctor in a fresh shell:
+
+- Windows (PowerShell): `irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex`
+- macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash`
+- If the repo is private and the raw URL is refused: `gh auth login` once, then
+  `gh api -H "Accept: application/vnd.github.raw" repos/atharellahi/reelforge/contents/install.sh | bash`
+  (or `... install.ps1 | iex` on Windows).
+
+If `reelforge.exe` exists but is not on PATH (Windows), call it as `%USERPROFILE%\.local\bin\reelforge.exe`.
+
+Keys: a **Gemini key is required** (imagery and voice). Look for it in `<repo>/.reelforge/.env`,
+`<repo>/.env`, `~/.reelforge/.env` or `~/.reelforge/config.json` (`reelforge doctor` says
+"gemini key set"). If missing, ask the user for it and write it to `<repo>/.reelforge/.env`
+as `GEMINI_API_KEY=...` (that file is gitignored) - never into config files that get committed,
+never echo it back. YouTube publishing additionally needs `YOUTUBE_CLIENT_SECRET=<path to the
+OAuth desktop client json>` and one `reelforge accounts add --label <name>` per channel.
+
+**Read `references/lessons.md` before your first storyboard.** It is the memory of the
+sessions that built this: what the reviewer asked for, in their words, and every trap.
+
+## Opening the UI for the user
+When asked for the UI, or when a visual review is easier than describing it, run
+`reelforge ui --repo <repo> --no-open` **in the background** and give the user the URL it
+prints (http://127.0.0.1:7733/). It stays up until the session ends. The Library tab shows
+every render with a player, the drafted copy, and the publish buttons.
+
+## Repos
+A local path or a GitHub URL both work everywhere a repo is expected; URLs are cloned under
+`~/.reelforge/repos/`. A product that depends on another repo (its API, its mobile app) is
+registered once with `reelforge products add <repo> --with <other-repo-url>`; after that
+`collect` reads both. Private repos need the user's own git access (`gh auth login`).
 
 ## Workflow
 
