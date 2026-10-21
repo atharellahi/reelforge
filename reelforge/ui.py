@@ -124,8 +124,10 @@ class H(BaseHTTPRequestHandler):
                 # register a product: primary repo (cloned if a URL) + extra repos
                 repo = scan.resolve_repo(body["repo"])
                 project = C.project_dir(repo)
-                extra = [C.portable_repo(x) for x in (body.get("extra_repos") or []) if x]
-                name = body.get("name") or os.path.basename(repo)
+                meta = C.project_meta(project)
+                given = [x for x in (body.get("extra_repos") or []) if x]
+                extra = [C.portable_repo(x) for x in given] if given else meta.get("extra_repos", [])
+                name = body.get("name") or meta.get("name") or os.path.basename(repo)
                 C.save_project_meta(project, {"name": name, "extra_repos": extra})
                 C.remember_product(name, repo, extra)
                 return self._json({"ok": True, "repo": repo, "products": C.products()})

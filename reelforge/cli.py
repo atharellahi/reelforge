@@ -123,9 +123,13 @@ def cmd_products(a):
             sys.exit("usage: reelforge products add <repo> [--name NAME] [--with REPO ...]")
         repo = scan.resolve_repo(a.repo)
         project = C.project_dir(repo)
-        extra = [C.portable_repo(r) for r in (a.with_repo or [])]
-        C.save_project_meta(project, {"name": a.name or os.path.basename(repo), "extra_repos": extra})
-        C.remember_product(a.name or os.path.basename(repo), repo, extra)
+        # project.json may already define extra repos (it came with the clone);
+        # only --with replaces them
+        meta = C.project_meta(project)
+        extra = [C.portable_repo(r) for r in a.with_repo] if a.with_repo else meta.get("extra_repos", [])
+        name = a.name or meta.get("name") or os.path.basename(repo)
+        C.save_project_meta(project, {"name": name, "extra_repos": extra})
+        C.remember_product(name, repo, extra)
         print(f"  added {a.name or os.path.basename(repo)} -> {repo}")
         print("  next: reelforge scan", repo)
     elif a.action == "default-channel":
