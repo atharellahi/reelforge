@@ -191,6 +191,40 @@ def cmd_products(a):
         print(f"  default YouTube channel for this product: {a.name}")
 
 
+def cmd_prune(a):
+    """Delete cached images no render refers to. Every iteration on a video
+    leaves its pictures behind; without this the cache grows with the
+    rejects and the repo carries them forever."""
+    import glob, json, re as _re
+    from . import scan
+    repo = scan.resolve_repo(a.repo)
+    project = C.project_dir(repo)
+    jobs = sorted(glob.glob(os.path.join(project, "out", "*", "storyboard.json")), reverse=True)
+    if a.keep_last:
+        jobs = jobs[: a.keep_last]
+    keep = {"logo.png", "logo.svg", "logo.jpg"}
+    for j in jobs:
+        with open(j, encoding="utf-8") as fh:
+            keep |= {m.split("/")[-1] for m in _re.findall(r"assets/[A-Za-z0-9_.-]+", fh.read())}
+    for sbp in glob.glob(os.path.join(project, "storyboards", "*.json")):
+        with open(sbp, encoding="utf-8") as fh:
+            keep |= {m.split("/")[-1] for m in _re.findall(r"assets/[A-Za-z0-9_.-]+", fh.read())}
+    adir = os.path.join(project, "assets")
+    gone, size = [], 0
+    for f in sorted(os.listdir(adir)):
+        if f not in keep and not f.startswith("logo"):
+            size += os.path.getsize(os.path.join(adir, f))
+            if not a.dry_run:
+                os.remove(os.path.join(adir, f))
+            gone.append(f)
+    kept = len(os.listdir(adir))
+    verb = "would remove" if a.dry_run else "removed"
+    print(f"  {verb} {len(gone)} unreferenced images ({size / 1e6:.1f} MB); {kept} kept "
+          f"(referenced by {len(jobs)} render{'s' if len(jobs) != 1 else ''}{' + saved storyboards' if glob.glob(os.path.join(project, 'storyboards', '*.json')) else ''})")
+    if gone and not a.dry_run:
+        print("  if .reelforge is committed: git add -A .reelforge && git commit")
+
+
 def cmd_check(a):
     """Re-run the rule checks on an existing render - no re-render, no spend.
     Useful when the checker improves or a render was reviewed by hand."""
@@ -338,6 +372,10 @@ def main(argv=None):
     j = sub.add_parser("jobs"); j.add_argument("repo"); j.set_defaults(fn=cmd_jobs)
 
     k = sub.add_parser("check"); k.add_argument("repo"); k.add_argument("job"); k.set_defaults(fn=cmd_check)
+
+    pn = sub.add_parser("prune", help="delete cached images no render references"); pn.add_argument("repo")
+    pn.add_argument("--keep-last", type=int, metavar="N", help="only count the last N renders as references")
+    pn.add_argument("--dry-run", action="store_true"); pn.set_defaults(fn=cmd_prune)
 
     co = sub.add_parser("collect", help="gather evidence for a human or Claude to write features.json from (no model call)")
     co.add_argument("repo"); co.add_argument("--with", dest="with_repo", action="append", metavar="REPO"); co.set_defaults(fn=cmd_collect)
