@@ -31,9 +31,7 @@ and then re-run doctor in a fresh shell:
 
 - Windows (PowerShell): `irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex`
 - macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash`
-- If the repo is private and the raw URL is refused: `gh auth login` once, then
-  `gh api -H "Accept: application/vnd.github.raw" repos/atharellahi/reelforge/contents/install.sh | bash`
-  (or `... install.ps1 | iex` on Windows).
+The repo is public; no GitHub login is needed for this.
 
 If `reelforge.exe` exists but is not on PATH (Windows), call it as `%USERPROFILE%\.local\bin\reelforge.exe`.
 

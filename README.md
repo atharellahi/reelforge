@@ -18,7 +18,7 @@ You need Claude Code and a Gemini key. Then:
    `irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex`
    `curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash`
    It installs anything missing (Python, git, ffmpeg, Chrome), reelforge, and the
-   Claude skill. Safe to re-run. (Private repo? `gh auth login` first - see below.)
+   Claude skill. Safe to re-run. No GitHub account needed - the repo is public.
 2. **Put your Gemini key** in `~/.reelforge/.env`: `GEMINI_API_KEY=...`
    (https://aistudio.google.com/apikey). Nothing else is required to make videos.
 3. **Open a new terminal**, `cd` into the product repo, run `claude`, and ask:
@@ -45,10 +45,6 @@ its Claude Code skill. Safe to re-run.
 
     # macOS / Linux
     curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash
-
-While the repo is private the raw URLs need GitHub access: run `gh auth login`
-once, then `gh api -H "Accept: application/vnd.github.raw"
-repos/atharellahi/reelforge/contents/install.sh | bash` (Windows: `install.ps1 | iex`).
 
 Then put your Gemini key in `~/.reelforge/.env` (the installer creates the
 file), open Claude Code in your project and ask for a video. Claude does the
@@ -109,12 +105,13 @@ Nothing here depends on any other machine being on.
     winget install Gyan.FFmpeg
     # plus Google Chrome from google.com/chrome (Edge or Chromium also work)
 
-**2. Install reelforge** - the repo is private, so you need to be a collaborator
-and signed in to GitHub in git (it will prompt once).
+**2. Install reelforge** - or skip this whole step with the one-line installer above.
 
-    pip install git+https://github.com/atharellahi/reelforge.git
-    pip install faster-whisper          # optional: exact narration cuts + voice check
-    reelforge doctor                    # if "reelforge" is not found: python -m reelforge.cli doctor
+    pip install pipx && pipx ensurepath          # then open a new terminal
+    pipx install git+https://github.com/atharellahi/reelforge.git
+    pipx inject reelforge faster-whisper         # optional: exact narration cuts + voice check
+    reelforge skill install
+    reelforge doctor
 
 `doctor` lists ffmpeg, Chrome, keys and accounts. Fix anything marked MISSING.
 
