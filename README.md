@@ -10,6 +10,31 @@ publishes to whichever YouTube channel or Instagram account you choose.
 Nothing runs on a server. Each person installs it, adds their own keys, and
 the project's shared state (features, brand, corrections) lives in the repo.
 
+## For teammates: getting started in five minutes
+
+You need Claude Code and a Gemini key. Then:
+
+1. **One command** (Windows PowerShell / macOS Terminal):
+   `irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex`
+   `curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash`
+   It installs anything missing (Python, git, ffmpeg, Chrome), reelforge, and the
+   Claude skill. Safe to re-run. (Private repo? `gh auth login` first - see below.)
+2. **Put your Gemini key** in `~/.reelforge/.env`: `GEMINI_API_KEY=...`
+   (https://aistudio.google.com/apikey). Nothing else is required to make videos.
+3. **Open a new terminal**, `cd` into the product repo, run `claude`, and ask:
+   *"make a 30-second short about the upload feature"* ·
+   *"a 75-second product film in 16:9"* · *"open the reelforge UI"*.
+   Claude reads the code, writes the storyboard, builds, shows you a contact
+   sheet, and iterates. Say what you'd change; it stores corrections for the team.
+4. **To publish**, once: copy the team's YouTube `client_secret.json` somewhere,
+   add `YOUTUBE_CLIENT_SECRET=<path>` to the same `.env`, and run
+   `reelforge accounts add --label <channel-name>` (browser consent; pick the
+   account AND the channel). Then ask Claude to publish - it confirms channel and
+   visibility before it does.
+5. **Commit `.reelforge/`** in the product repo when you're done; renders are
+   ignored, everything else (facts, brand, scenes, storyboards, corrections) is
+   shared.
+
 ## Install: one command
 
 Installs whatever is missing (Python, git, ffmpeg, Chrome), then reelforge and
