@@ -12,7 +12,19 @@ the project's shared state (features, brand, corrections) lives in the repo.
 
 ## For teammates: getting started in five minutes
 
-You need Claude Code and a Gemini key. Then:
+You need Claude Code (terminal or the VS Code extension) and a Gemini key. The
+skill installs at user level, so it works in **every repo you open**, not just
+the ones that ship with it.
+
+**Easiest: paste this into Claude Code, in any folder:**
+
+> Install reelforge for me. On Windows run
+> `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex"`;
+> on macOS run `curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash`.
+> Then ask me for my Gemini key and put it in ~/.reelforge/.env as GEMINI_API_KEY.
+
+Claude runs it, asks for the key, and from then on "make a video about X" works
+in whatever repo you have open. Or do it by hand:
 
 1. **One command** (Windows PowerShell / macOS Terminal):
    `irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex`
