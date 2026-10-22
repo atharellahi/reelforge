@@ -29,11 +29,17 @@ reelforge publish <repo> <job> --youtube <label> --privacy unlisted
 Run `reelforge doctor`. If the command does not exist, install everything with ONE command
 and then re-run doctor in a fresh shell:
 
-- Windows (PowerShell): `irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex`
+- Windows, from PowerShell: `irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex`
+- Windows, from YOUR shell when it is Git Bash (the VS Code extension's default):
+  `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/atharellahi/reelforge/main/install.ps1 | iex"`
 - macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/atharellahi/reelforge/main/install.sh | bash`
-The repo is public; no GitHub login is needed for this.
+The repo is public; no GitHub login is needed. Installing Chrome may show a Windows
+permission prompt on the user's screen - tell them to expect it.
 
-If `reelforge.exe` exists but is not on PATH (Windows), call it as `%USERPROFILE%\.local\bin\reelforge.exe`.
+The installer adds `~/.local/bin` to PATH, but YOUR current shell will not see it until
+the editor restarts. Do not make the user restart: call the binary by full path for the
+rest of the session - Windows `$USERPROFILE/.local/bin/reelforge.exe`, macOS/Linux
+`~/.local/bin/reelforge` - and mention that `reelforge` will be on PATH next time.
 
 Keys: a **Gemini key is required** (imagery and voice). Look for it in `<repo>/.reelforge/.env`,
 `<repo>/.env`, `~/.reelforge/.env` or `~/.reelforge/config.json` (`reelforge doctor` says
