@@ -220,10 +220,14 @@ def project_dir(repo):
     global _ACTIVE_REPO
     _ACTIVE_REPO = os.path.abspath(repo)
     d = os.path.join(os.path.abspath(repo), ".reelforge")
-    for sub in ("out", "assets", "shots", "looks"):
+    fresh = not os.path.isdir(d)
+    for sub in ("out", "assets", "shots"):
         os.makedirs(os.path.join(d, sub), exist_ok=True)
     gi = os.path.join(d, ".gitignore")
-    if not os.path.exists(gi):
+    # Written once, when the project is created. Re-creating it on a branch
+    # that tracks it elsewhere left an untracked file that blocked `git
+    # checkout`; .git/info/exclude (below) covers ignoring on every branch.
+    if fresh and not os.path.exists(gi):
         # renders are large and regenerable, _engine is a runtime copy of the
         # package's renderer; everything else is worth sharing through git
         with open(gi, "w", encoding="utf-8") as fh:
